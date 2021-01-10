@@ -1070,7 +1070,6 @@ public:
    * \param[in] val_bodyforceturbo - Pointer to turbo body force vector
    */
   virtual void ComputeResidual(su2double *val_residual, CConfig *config, su2double *val_bodyforceres, su2double *val_blockagevector);
-//  virtual void ComputeResidual2(su2double *val_residual, CConfig *config, su2double *val_blockagevector);
   /*!
    * \overload
    * \param[out] val_residual_i - Pointer to the total residual at point i.
@@ -5229,13 +5228,7 @@ public:
    */
   ~CSourceBlockageVector(void);
 
-  /*!
-   * \brief Source term integration for a blockage vector
-   * \param[out] val_residual - Pointer to the residual vector.
-   * \param[in] config - Definition of the particular problem.
-   * \param[in] Coord_i - Coordinates of iPoint.
-   */
-  void ComputeResidual2(su2double *val_residual, CConfig *config, su2double *val_blockagevector);
+
 
 };
 /*!

@@ -132,10 +132,6 @@ inline su2double CSolver::GetPsiE_Inf(void) { return 0; }
 
 inline void CSolver::SetPrimitive_Gradient_GG(CGeometry *geometry, CConfig *config) { }
 
-inline void CSolver::ComputeBlockageGradient(CGeometry *geometry, CConfig *config) { }
-
-inline void CSolver::InterpolateBodyForceParams(CGeometry *geometry, CConfig *config) { }
-
 inline void CSolver::SetPrimitive_Gradient_LS(CGeometry *geometry, CConfig *config) { }
 
 inline void CSolver::Set_MPI_Primitive_Gradient(CGeometry *geometry, CConfig *config) { }
@@ -595,10 +591,6 @@ inline void CSolver::Source_Residual(CGeometry *geometry, CSolver **solver_conta
                      
 inline void CSolver::Source_Template(CGeometry *geometry, CSolver **solver_container, 
                           CNumerics *numerics, CConfig *config, unsigned short iMesh) { }
-
-inline void CSolver::ComputeBodyForce_Turbo(CConfig *config, CGeometry *geometry) {}
-
-inline void CSolver::ComputeBlockageVector(CConfig *config, CGeometry *geometry) {}
 
 inline su2double CSolver::GetTotal_Sens_Geo() { return 0; }
 

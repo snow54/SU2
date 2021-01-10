@@ -148,10 +148,15 @@ CDiscAdjSolver::~CDiscAdjSolver(void) {
   unsigned short iMarker;
 
   if (CSensitivity != NULL) {
+    cout << "Breakpoint 3.1" << endl;
     for (iMarker = 0; iMarker < nMarker; iMarker++) {
+      cout << "Breakpoint 3.2" << endl;
       delete [] CSensitivity[iMarker];
+      cout << "Breakpoint 3.3" << endl;
     }
+    cout << "Breakpoint 3.4" << endl;
     delete [] CSensitivity;
+    cout << "Breakpoint 3.5" << endl;
   }
 
 }
@@ -846,10 +851,9 @@ void CDiscAdjSolver::SetSensitivity(CGeometry *geometry, CConfig *config) {
 	  //config->TotalGrad_Camb_Norm();
 		Body_Force_Parameters = node[iPoint]->GetBodyForceParameters();
 	for (iDim = 0; iDim < 9; iDim++) {
-
 		Sensitivity = SU2_TYPE::GetDerivative(Body_Force_Parameters[iDim]);
 		/*--- Set the index manually to zero. ---*/
-		cout << "Sensitivity: "<< Sensitivity << endl;
+		//cout << "Sensitivity: "<< Sensitivity << endl;
 		AD::ResetInput(Body_Force_Parameters[iDim]);
 
 		/*--- If sharp edge, set the sensitivity to 0 on that region ---*/
@@ -892,8 +896,9 @@ void CDiscAdjSolver::SetSensitivity(CGeometry *geometry, CConfig *config) {
 		  }
 		}
 	  }
+    SetSurface_Sensitivity(geometry, config);
   }
-  SetSurface_Sensitivity(geometry, config);
+  
 }
 
 void CDiscAdjSolver::SetSurface_Sensitivity(CGeometry *geometry, CConfig *config) {

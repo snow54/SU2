@@ -1751,7 +1751,7 @@ void CDriver::Solver_Postprocessing(CSolver ****solver_container, CGeometry **ge
   
   /*--- Definition of the Class for the solution: solver_container[DOMAIN][MESH_LEVEL][EQUATION]. Note that euler, ns
    and potential are incompatible, they use the same position in sol container ---*/
-  
+  cout << "Breakpoint 1" << endl;
   for (iMGlevel = 0; iMGlevel <= config->GetnMGLevels(); iMGlevel++) {
     
     /*--- DeAllocate solution for a template problem ---*/
@@ -1761,9 +1761,11 @@ void CDriver::Solver_Postprocessing(CSolver ****solver_container, CGeometry **ge
     }
 
     /*--- DeAllocate solution for adjoint problem ---*/
-    
+    cout << "Breakpoint 2" << endl;
     if (adj_euler || adj_ns || disc_adj) {
+      cout << "Breakpoint 3" << endl;
       delete solver_container[val_iInst][iMGlevel][ADJFLOW_SOL];
+      cout << "Breakpoint 4" << endl;
       if (disc_adj_turb || adj_turb) {
         delete solver_container[val_iInst][iMGlevel][ADJTURB_SOL];
       }
@@ -1799,8 +1801,6 @@ void CDriver::Solver_Postprocessing(CSolver ****solver_container, CGeometry **ge
     if (disc_adj_fem) {
       delete solver_container[val_iInst][iMGlevel][ADJFEA_SOL];
     }
-    //BFM:
-    
     if(body_force){
       delete solver_container[val_iInst][iMGlevel][BFM_SOL];
     }

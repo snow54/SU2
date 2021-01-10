@@ -1872,7 +1872,7 @@ public:
   
   virtual void SetBodyForceDirect(su2double *val_bodyForce);
 
-  virtual su2double *GetBodyForceDirect(void);
+
   /*!
    * \brief A virtual member. Get the direct solution for the adjoint solver.
    * \return Pointer to the direct solution vector.
@@ -4826,7 +4826,7 @@ public:
   su2double* GetSolution_Direct();
 
   void SetBodyForceDirect(su2double *val_bodyForce);
-    su2double* GetBodyForceDirect(void);
+
   
   /*!
    * \brief Set the restart geometry (coordinate of the converged solution)

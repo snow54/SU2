@@ -1903,14 +1903,11 @@ void CAdjFluidIteration::Preprocess(COutput *output,
       config_container[val_iZone]->SetGlobalParam(ADJ_RANS, RUNTIME_FLOW_SYS, ExtIter);
     
     /*--- Solve the Euler, Navier-Stokes or Reynolds-averaged Navier-Stokes (RANS) equations (one iteration) ---*/
-    if (body_force) {
-      cout << "Interpolating camber normal field and blockage field to mesh" << endl;
-      solver_container[val_iZone][INST_0][MESH_0][FLOW_SOL]->InterpolateBodyForceParams(geometry_container[val_iZone][INST_0][MESH_0], config_container[val_iZone]);
-	    SU2_MPI::Barrier(MPI_COMM_WORLD);
-		  cout << "Computing blockage gradient field" << endl;
-		  solver_container[val_iZone][INST_0][MESH_0][FLOW_SOL]->ComputeBlockageGradient(geometry_container[val_iZone][INST_0][MESH_0], config_container[val_iZone]);
-	    SU2_MPI::Barrier(MPI_COMM_WORLD);
-    }
+    // if (body_force) {
+    //   solver_container[val_iZone][INST_0][MESH_0][BFM_SOL]->PreprocessBFMParams(geometry_container[val_iZone][INST_0][MESH_0], config_container[val_iZone], solver_container[val_iZone][INST_0][MESH_0][FLOW_SOL]);
+	  //   SU2_MPI::Barrier(MPI_COMM_WORLD);
+		//   solver_container[val_iZone][INST_0][MESH_0][BFM_SOL]->ComputeBFMSources(config_container[val_iZone], geometry_container[val_iZone][INST_0][MESH_0], solver_container[val_iZone][INST_0][MESH_0][FLOW_SOL]);
+    // }
     if (rank == MASTER_NODE && val_iZone == ZONE_0)
       cout << "Begin direct solver to store flow data (single iteration)." << endl;
     
@@ -2286,15 +2283,7 @@ void CDiscAdjFluidIteration::Preprocess(COutput *output,
     for (iPoint = 0; iPoint < geometry_container[val_iZone][val_iInst][iMesh]->GetnPoint(); iPoint++) {
         solver_container[val_iZone][val_iInst][iMesh][ADJFLOW_SOL]->node[iPoint]->SetSolution_Direct(solver_container[val_iZone][val_iInst][iMesh][FLOW_SOL]->node[iPoint]->GetSolution());
 	}
-    //BFM:
-    // if(body_force){
-    //   //TODO: make setter for ADJFLOW_SOL for body-force which sets body-forces and body-force parameters. 
-      
-    //   solver_container[val_iZone][val_iInst][iMesh][FLOW_SOL]->InterpolateBodyForceParams(geometry_container[val_iZone][val_iInst][iMesh], config_container[val_iZone]);
-		//   solver_container[val_iZone][val_iInst][iMesh][FLOW_SOL]->ComputeBlockageGradient(geometry_container[val_iZone][val_iInst][iMesh], config_container[val_iZone]);
-		// 	solver_container[val_iZone][MESH_0][INST_0][FLOW_SOL]->ComputeBodyForce_Turbo(config_container[val_iZone],geometry_container[val_iZone][val_iInst][MESH_0]);
-		// 	solver_container[val_iZone][MESH_0][INST_0][FLOW_SOL]->ComputeBlockageVector(config_container[val_iZone],geometry_container[val_iZone][val_iInst][MESH_0]);
-    // }
+    
     }
     if (turbulent && !config_container[val_iZone]->GetFrozen_Visc_Disc()) {
       for (iPoint = 0; iPoint < geometry_container[val_iZone][val_iInst][MESH_0]->GetnPoint(); iPoint++) {
@@ -2536,11 +2525,6 @@ void CDiscAdjFluidIteration::SetDependencies(CSolver *****solver_container, CGeo
   /*--- Compute coupling between flow and turbulent equations ---*/
 
   solver_container[iZone][iInst][MESH_0][FLOW_SOL]->Set_MPI_Solution(geometry_container[iZone][iInst][MESH_0], config_container[iZone]);
-//    if(body_force){
-//        solver_container[iZone][INST_0][MESH_0][FLOW_SOL]->InterpolateBodyForceParams(geometry_container[iZone][INST_0][MESH_0], config_container[iZone]);
-//        solver_container[iZone][INST_0][MESH_0][FLOW_SOL]->ComputeBodyForce_Turbo(config_container[iZone],geometry_container[iZone][INST_0][MESH_0]);
-//        solver_container[iZone][INST_0][MESH_0][FLOW_SOL]->ComputeBlockageVector(config_container[iZone],geometry_container[iZone][INST_0][MESH_0]);
-//    }
   if (turbulent && !frozen_visc){
     solver_container[iZone][iInst][MESH_0][FLOW_SOL]->Preprocessing(geometry_container[iZone][iInst][MESH_0],solver_container[iZone][iInst][MESH_0], config_container[iZone], MESH_0, NO_RK_ITER, RUNTIME_FLOW_SYS, true);
     solver_container[iZone][iInst][MESH_0][TURB_SOL]->Postprocessing(geometry_container[iZone][iInst][MESH_0],solver_container[iZone][iInst][MESH_0], config_container[iZone], MESH_0);

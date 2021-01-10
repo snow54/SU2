@@ -5745,11 +5745,11 @@ void CSourceBodyForce::ComputeResidual(su2double *val_residual, CConfig *config,
     /*--- Adding source terms to the governing equations ---*/
     /*--- Zero the continuity contribution ---*/
 	
-	val_residual[0] = -Volume * (Blockage_Source[0] + Body_Force_Source[0])/ Force_Ref;
+	//val_residual[0] = -Volume * (Blockage_Source[0] + Body_Force_Source[0])/ Force_Ref;
 //	val_residual[0] = 0.0;
     /*--- Momentum contribution ---*/
 	
-    for (iDim = 1; iDim < nDim+2; iDim++){
+    for (iDim = 0; iDim < nDim+2; iDim++){
         val_residual[iDim] = (-Volume * Body_Force_Source[iDim] / Force_Ref) + (-Volume * Blockage_Source[iDim] / Force_Ref);
 	}
     /*--- Energy contribution ---*/
@@ -5777,26 +5777,6 @@ CSourceBlockageVector::~CSourceBlockageVector(void) {
 
   if (Blockage_Vector != NULL) delete [] Blockage_Vector;
 
-}
-
-void CSourceBlockageVector::ComputeResidual2(su2double *val_residual, CConfig *config, su2double *val_blockagevector) {
-    unsigned short iDim;
-    su2double Force_Ref = config->GetForce_Ref();
-
-    /*--- Call body force vector from CEulerSolver::ComputeBodyForce ---*/
-    for (iDim = 0; iDim < nDim + 2; iDim++ ) {
-        Blockage_Vector[iDim] = val_blockagevector[iDim];
-    }
-
-    /*--- Adding source terms to the governing equations ---*/
-    /*--- Zero the continuity contribution ---*/
-
-    
-
-    /*--- Momentum contribution ---*/
-
-    for (iDim = 0; iDim < nDim + 2; iDim++)
-        val_residual[iDim] += -Volume * U_i[0] * Blockage_Vector[iDim] / Force_Ref;
 }
 
 

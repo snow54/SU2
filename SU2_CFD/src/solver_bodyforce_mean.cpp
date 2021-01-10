@@ -1,3 +1,40 @@
+/*!
+ * \file solver_bodyforce_mean.cpp
+ * \brief Main subroutines for solving bodyforce turbomachinery problems.
+ * \author E.C.Bunschoten
+ * \version 6.2.0 "Falcon"
+ *
+ * The current SU2 release has been coordinated by the
+ 
+ * SU2 International Developers Society <www.su2devsociety.org>
+ * with selected contributions from the open-source community.
+ *
+ * The main research teams contributing to the current release are:
+ *  - Prof. Juan J. Alonso's group at Stanford University.
+ *  - Prof. Piero Colonna's group at Delft University of Technology.
+ *  - Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
+ *  - Prof. Alberto Guardone's group at Polytechnic University of Milan.
+ *  - Prof. Rafael Palacios' group at Imperial College London.
+ *  - Prof. Vincent Terrapon's group at the University of Liege.
+ *  - Prof. Edwin van der Weide's group at the University of Twente.
+ *  - Lab. of New Concepts in Aeronautics at Tech. Institute of Aeronautics.
+ *
+ * Copyright 2012-2019, Francisco D. Palacios, Thomas D. Economon,
+ *                      Tim Albring, and the SU2 contributors.
+ *
+ * SU2 is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * SU2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with SU2. If not, see <http://www.gnu.org/licenses/>.
+ */
 #include "../include/solver_structure.hpp"
 #include <vector>
 
@@ -5,139 +42,180 @@ CBodyForceModelSolver::CBodyForceModelSolver(void) : CSolver() {
 
 }
 CBodyForceModelSolver::CBodyForceModelSolver(CGeometry *geometry, CConfig *config, CSolver *fluidsolver, unsigned short iMesh) : CSolver() {
+	/*
+	BodyForceModel constructor
+	All BFM settings defined in the configuration file are stored in the right locations
+	*/
 	unsigned short iZone = config->GetiZone();
 	unsigned short BFM_Formulation = config->GetBFM_Formulation();
-	SetBFM_Formulation(BFM_Formulation);
+	SetBFM_Formulation(BFM_Formulation);	// Storing BFM formulation
 
 	cout << "Initializing body-force model" << endl;
+	// Storing rotation vector components
 	Rotation_vector[0] = config->GetRotation_Rate_X(iZone);
 	Rotation_vector[1] = config->GetRotation_Rate_Y(iZone);
 	Rotation_vector[2] = config->GetRotation_Rate_Z(iZone);
-	cout << "Stored rotation vector components " << endl;
-	Rotation_rate = config->GetBody_Force_Rotation()* 2 * M_PI/60.0;
-	unsigned long n_points = geometry->GetnPoint();
+	Rotation_rate = config->GetBody_Force_Rotation()* 2 * M_PI/60.0; 	// Storing rotation rate
+	nPoint_geom = geometry->GetnPoint();	// Storing geometry cell count
 
-	proj_vector_axial  = new su2double*[3];
-	proj_vector_tangential  = new su2double*[3];
-	proj_vector_radial  = new su2double*[3];
-	relative_vel = new su2double*[3];
-	cyl_coordinates = new su2double*[2];
-	cyl_coordinates[0] = new su2double[n_points];
-	cyl_coordinates[1] = new su2double[n_points];
-	for(size_t ic=0; ic<3; ic++){
-		proj_vector_axial[ic] = new su2double[n_points];
-		proj_vector_tangential[ic] = new su2double[n_points];
-		proj_vector_radial[ic] = new su2double[n_points];
-		relative_vel[ic] = new su2double[n_points];
-	}
-	cout << "End of BFM constructor" << endl;
+	
 	
 }
 
 void CBodyForceModelSolver::LoadRestart(CGeometry **geometry, CSolver ***fluidsolver, CConfig *config, int val_iter, bool val_update_geo){
+	/*
+	This function currently doesn't do anything. Upon restarting, the blade geometry is interpolated onto the mesh nodes and 
+	the body-force sources are computed based on the restart solution. 
+	*/
 	cout <<"Loading restart from body-force model" << endl;
 }
 
 void CBodyForceModelSolver::PreprocessBFMParams(CGeometry *geometry, CConfig *config, CSolver *fluidSolver){
+	/*
+	This function performs all the preprocessing functionalities required for the BFM to run. This includes 
+	reading the BFM geometry input file, interpolating the blade geometry to the mesh and computing the 
+	cylindrical coordinates and projections of the mesh cells.
+	*/
 	cout << "Preprocessing function called" << endl;
+	// Reading BFM input file
     ReadInputFile(config, geometry);
+	SU2_MPI::Barrier(MPI_COMM_WORLD);
+	
+	// Computing cylindrical projections and coordinates of mesh cells
+	ComputeCylProjections(geometry, config, fluidSolver);
+
+	// Interpolating blade geometry to mesh
     InterpolateGeometry(geometry, config, fluidSolver);
+	SU2_MPI::Barrier(MPI_COMM_WORLD);
+
+	// In case of Thollets BFM, the metal blockage gradient field is computed
 	if(kind_bfm==1){
     	ComputeBlockageGradient(geometry, config, fluidSolver);
+		SU2_MPI::Barrier(MPI_COMM_WORLD);
 	}
-	ComputeCylProjections(geometry, config, fluidSolver);
+
+	
 }
 void CBodyForceModelSolver::ComputeRelVelocity(CGeometry *geometry, CConfig *config, CSolver *fluidsolver){
+	/*
+	Body-force models require the cylindrical, relative velocity. This function computes the relative velocity in the cylindrical
+	coordinate system. This function therefore has to be called each iteration prior to the BFM itself.
+	*/
 	su2double *Coord, *U_i,*Geometric_Parameters;
 	su2double W_ax, W_r, W_th, rotFac;
 	for(unsigned long iPoint=0; iPoint<geometry->GetnPoint(); iPoint++){
-		Coord = geometry->node[iPoint]->GetCoord();
-		U_i = fluidsolver->node[iPoint]->GetSolution();
-		// Computing relative velocity components in axial, radial and tangential direction
-		W_ax = 0;
-		W_r = 0;
-		W_th = 0;
 
+		// Obtaining node coordinates
+		Coord = geometry->node[iPoint]->GetCoord();
+
+		// Obtaining solution flow variables
+		U_i = fluidsolver->node[iPoint]->GetSolution();
+
+		// Computing relative velocity components in axial, radial and tangential direction
+		W_ax = 0;	// Relative, axial velocity
+		W_r = 0;	// Relative, radial velocity
+		W_th = 0;	// Relative, tangential velocity
+
+		// Obtaining BFM geometric parameters from node
 		Geometric_Parameters = fluidsolver->node[iPoint]->GetBodyForceParameters();
-		rotFac = Geometric_Parameters[6];
+		rotFac = Geometric_Parameters[6];	// Rotation factor, distinguish between rotor and stator
+
 		// Adding to the relative velocity components through dot product of absolute velocity and respective unit vector
 		for(int iDim = 0; iDim < nDim; iDim++){
-			W_ax += proj_vector_axial[iDim][iPoint] * U_i[iDim+1]/U_i[0];
-			W_th += proj_vector_tangential[iDim][iPoint] * U_i[iDim+1]/U_i[0];
-			W_r += proj_vector_radial[iDim][iPoint] * U_i[iDim+1]/U_i[0];
+			W_ax += proj_vector_axial[iPoint][iDim] * U_i[iDim+1]/U_i[0];
+			W_th += proj_vector_tangential[iPoint][iDim] * U_i[iDim+1]/U_i[0];
+			W_r += proj_vector_radial[iPoint][iDim] * U_i[iDim+1]/U_i[0];
 		}
 		// Induced velocity due to rotation is subtracted from tangential velocity
-		W_th -= rotFac * Rotation_rate * cyl_coordinates[1][iPoint];
-		relative_vel[0][iPoint] = W_ax;
-		relative_vel[1][iPoint] = W_th;
-		relative_vel[2][iPoint] = W_r;
+		W_th -= rotFac * Rotation_rate * cyl_coordinates[iPoint][1];
+
+		// Storing relative velocity vector in class data structure
+		relative_vel[iPoint][0] = W_ax;
+		relative_vel[iPoint][1] = W_th;
+		relative_vel[iPoint][2] = W_r;
 	}
 }
 
 void CBodyForceModelSolver::ComputeCylProjections(CGeometry *geometry, CConfig *config, CSolver *fluidsolver){
+	/*
+	This function computes the cylindrical coordinates and projections of the mesh cells based on the rotation 
+	vector components defined in the configuration file.
+	*/
 	cout << "Computing cylindrical unit vectors and coordinates" << endl;
 	su2double *Coord;
 	su2double rot_dot_x, rot_dot_rot;
 	su2double ax, radius;
 	su2double axial_vector[nDim], radial_vector[nDim];
 
-	for(unsigned long iPoint=0; iPoint<geometry->GetnPoint(); iPoint++){
+	for(unsigned long iPoint=0; iPoint<nPoint_geom; iPoint++){
+		// Getting node Cartesian coordinates
 		Coord = geometry->node[iPoint]->GetCoord();
 
 		rot_dot_x = 0;	// dot product between axial unit vector and coordinate vector
 		rot_dot_rot = 0;	// dot product of axial unit vector
 		radius = 0;	// Radial coordinate
 		ax = 0;		// Axial coordinate
-		if (nDim == 3){
-			// Computing axial dot products
-			for(int iDim = 0; iDim < nDim; iDim ++){
-				rot_dot_x += Rotation_vector[iDim]*Coord[iDim];
-				rot_dot_rot += Rotation_vector[iDim]* Rotation_vector[iDim];
-			}
-			//
-			for(int iDim = 0; iDim < nDim; iDim ++){
-				axial_vector[iDim] = (rot_dot_x/rot_dot_rot)* Rotation_vector[iDim]; // Parallel projection of coordinate vector onto rotation axis
-				radial_vector[iDim] = Coord[iDim] - axial_vector[iDim];	// Orthogonal projection of coordinate vector onto rotation axis
-				ax += axial_vector[iDim]*axial_vector[iDim];	
-				radius += radial_vector[iDim]*radial_vector[iDim];
-				proj_vector_axial[iDim][iPoint] = Rotation_vector[iDim];	// Appending axial unit vector component
-			}
-			radius = sqrt(radius); // Computing radial coordinate
-			ax = sqrt(ax);	// Compuring axial coordinate
-			if(rot_dot_x < 0.0){ax = -ax;}	// In case the coordinate parallel projection is negative, the axial coordinate is flipped
-			cyl_coordinates[0][iPoint] = ax;
-			cyl_coordinates[1][iPoint] = radius;
-			// Computing tangential unit vector components through cross product of radial and axial vectors
-			proj_vector_tangential[0][iPoint] = (proj_vector_axial[1][iPoint]*radial_vector[2] - proj_vector_axial[2][iPoint]*radial_vector[1])/radius;
-			proj_vector_tangential[1][iPoint] = (-proj_vector_axial[0][iPoint]*radial_vector[2] + proj_vector_axial[2][iPoint]*radial_vector[0])/radius;
-			proj_vector_tangential[2][iPoint] = (proj_vector_axial[0][iPoint]*radial_vector[1] - proj_vector_axial[1][iPoint]*radial_vector[0])/radius;
 
-			// Computing radial unit vector through normilization of radial vector
-			for(int iDim = 0; iDim < nDim; iDim ++){proj_vector_radial[iDim][iPoint] = radial_vector[iDim]/radius;}
+		// Computing axial dot products
+		for(int iDim = 0; iDim < nDim; iDim ++){
+			rot_dot_x += Rotation_vector[iDim]*Coord[iDim];
+			rot_dot_rot += Rotation_vector[iDim]* Rotation_vector[iDim];
+		}
+		//
+		for(int iDim = 0; iDim < nDim; iDim ++){
+			axial_vector[iDim] = (rot_dot_x/rot_dot_rot)* Rotation_vector[iDim]; // Parallel projection of coordinate vector onto rotation axis
+			radial_vector[iDim] = Coord[iDim] - axial_vector[iDim];	// Orthogonal projection of coordinate vector onto rotation axis
+			ax += axial_vector[iDim]*axial_vector[iDim];	
+			radius += radial_vector[iDim]*radial_vector[iDim];
+			proj_vector_axial[iPoint][iDim] = Rotation_vector[iDim];	// Appending axial unit vector component
+		}
+
+		// Computing absolute values for cylindrical coordinates
+		radius = sqrt(radius);	// Computing radial coordinate
+		ax = sqrt(ax);	// Computing axial coordinate
+		if(rot_dot_x < 0.0){ax = -ax;}	// In case the coordinate parallel projection is negative, the axial coordinate is flipped
+
+		// Storing cylindrical coordinates in class property
+		cyl_coordinates[iPoint][0] = ax;
+		cyl_coordinates[iPoint][1] = radius;
+
+		// Computation of tangential and radial projection vectors
+		int i_left, i_right;
+		for(int iDim=0; iDim<nDim; iDim++){
+
+			// Computing tangential unit vector components through cross product of radial and axial vectors
+			i_left = (iDim + 1) % nDim;
+			i_right = (iDim + 2) % nDim;
+			proj_vector_tangential[iPoint][iDim] = (proj_vector_axial[iPoint][i_left]*radial_vector[i_right] 
+			- proj_vector_axial[iPoint][i_right]*radial_vector[i_left])/radius;
+
+			//Radial projection unit vector is normalized radial coordinate vector
+			proj_vector_radial[iPoint][iDim] = radial_vector[iDim]/radius;
+		}
+		
 			
-			// Currently, the method is incompatible with 2D simulations
-			}else{
-				radius = config->GetBody_Force_Radius();
-				ax = Coord[0];
-				cyl_coordinates[0][iPoint] = ax;
-				cyl_coordinates[1][iPoint] = radius;
-			}
 	}
 }
 void CBodyForceModelSolver::BFM_Hall(CConfig *config, CGeometry *geometry, CSolver *fluidsolver){
+	/*
+	This function describes Hall's BFM formulation. It computes the normal body-force magnitude, transforms it to
+	a 3D, Cartesian force vector and stores it in the node as a body-force source vector.
+	*/
 	unsigned long iPoint;
 	su2double *U_i, *V_i, *Coord_i, *Geometric_Parameters;
 	su2double pi = M_PI, pitch;
 	su2double bfFac, b, Nx, Nt, Nr, x_le, rotFac, BF_blades, radius;
-	su2double W_ax, W_th, W_r;
-	su2double WdotN, W_nx, W_nr, W_nth, W_px, W_pth, W_pr, W_p, W;
+	su2double *W;
+	su2double WdotN, W_nx, W_nr, W_nth, W_px, W_pth, W_pr, W_p, W_mag;
 	su2double delta, F_n;
 	su2double F_ax, F_th, F_r, e_source;
 	su2double BF_source[nDim+2], F[nDim];
 
 
 	for(iPoint=0; iPoint<geometry->GetnPoint(); iPoint++){
+		// Getting solution variables from the flow solver
 		U_i = fluidsolver->node[iPoint]->GetSolution();
+		// Getting body-force parameters stored in the node
 		Geometric_Parameters = fluidsolver->node[iPoint]->GetBodyForceParameters();
 		bfFac = Geometric_Parameters[0]; 	// Body-force factor. Multiplies all body-forces.
 		b = Geometric_Parameters[1];			// Metal blockage factor
@@ -148,53 +226,58 @@ void CBodyForceModelSolver::BFM_Hall(CConfig *config, CGeometry *geometry, CSolv
 		rotFac = Geometric_Parameters[6];	// Rotation factor. Multiplies the body-force rotation value.
 		BF_blades = Geometric_Parameters[7];				// Blade row blade count
 
-		W_ax = relative_vel[0][iPoint];
-		W_th = relative_vel[1][iPoint];
-		W_r = relative_vel[2][iPoint];
+		// Getting cylindrical, relative velocity vector
+		W = relative_vel[iPoint];
 
-		radius = cyl_coordinates[1][iPoint];
-		pitch = 2 * pi * radius / BF_blades;
+		radius = cyl_coordinates[iPoint][1];
+		pitch = 2 * pi * radius / BF_blades;	// Computing pitch
 
-		WdotN = W_ax * Nx + W_r * Nr + W_th * Nt;		// Dot product of relative velocity and camber normal vector
+		WdotN = W[0] * Nx + W[2] * Nr + W[1] * Nt;		// Dot product of relative velocity and camber normal vector
 		W_nx = WdotN * Nx, W_nr = WdotN * Nr, W_nth = WdotN * Nt;		// Relative velocity components normal to the blade
-		W_px = W_ax - W_nx, W_pr = W_r - W_nr, W_pth = W_th - W_nth;  // Relative velocity components parallel to the blade 
+		W_px = W[0] - W_nx, W_pr = W[2] - W_nr, W_pth = W[1] - W_nth;  // Relative velocity components parallel to the blade 
 		
 		W_p = sqrt(W_px * W_px + W_pr * W_pr + W_pth * W_pth);	// Parallel relative velocity magnitude
-		W = sqrt(W_ax * W_ax + W_r * W_r + W_th * W_th);					// Relative velocity magnitude
+		// Relative velocity magnitude
+		W_mag = 0;
+		for(unsigned short iDim=0; iDim<nDim; iDim++){
+			W_mag += W[iDim]*W[iDim];
+		}
+		W_mag = sqrt(W_mag);
 		// Calculating the deviation angle
-		delta = asin(WdotN / W);
+		delta = asin(WdotN / W_mag);
 
-		F_n = -bfFac * pi * delta * (1 / pitch) * (1 / abs(Nt)) * W * W;
+		// Computing normal body force magnitude
+		F_n = -bfFac * pi * delta * (1 / pitch) * (1 / abs(Nt)) * W_mag * W_mag;
 
-		// Transforming the normal and parallel force components to cyllindrical coordinates
+		// Transforming the normal and force component to cyllindrical coordinates
 			
-		F_ax = F_n * (cos(delta) * Nx - sin(delta) * (W_px / W_p));
-		F_r = F_n * (cos(delta) * Nr - sin(delta) * (W_pr / W_p));
-		F_th = F_n * (cos(delta) * Nt - sin(delta) * (W_pth / W_p));
-		e_source = rotFac * Rotation_rate * radius * F_th;
+		F_ax = F_n * (cos(delta) * Nx - sin(delta) * (W_px / W_p));		// Axial body-force component
+		F_r = F_n * (cos(delta) * Nr - sin(delta) * (W_pr / W_p));		// Radial body-force component
+		F_th = F_n * (cos(delta) * Nt - sin(delta) * (W_pth / W_p));	// Tangential body-force component
+		e_source = rotFac * Rotation_rate * radius * F_th;				// Energy source term
 		
 		// Appending Cartesial body-forces to body-force vector
-		// for(int iDim=0; iDim<nDim; iDim++){
-		// 	F[iDim] = U_i[0] * (F_ax*i_ax[iDim] + F_th*i_theta[iDim] + F_r*i_r[iDim]);
-		// }
-					// Appending Cartesial body-forces to body-force vector
 		for(int iDim=0; iDim<nDim; iDim++){
 			F[iDim] = U_i[0] * (F_ax*proj_vector_axial[iDim][iPoint] + F_th*proj_vector_tangential[iDim][iPoint] + F_r*proj_vector_radial[iDim][iPoint]);
 		}
+
 		// Appending source term values to the body-force source term vector
 		BF_source[0] = 0.0;	// empty density component
+
 		// Appending momentum source terms
 		for(int iDim = 0; iDim < nDim; iDim ++) {
 			BF_source[iDim + 1] = F[iDim];
 		}
-			// Appending energy source term
+		// Appending energy source term
 		BF_source[nDim+1] = U_i[0] * e_source;
+
+		// Storing body-force source term at node
 		fluidsolver->node[iPoint]->SetBody_Force_Source(BF_source);
 	}
 }
 void CBodyForceModelSolver::BFM_Thollet(CConfig *config, CGeometry *geometry, CSolver *fluidsolver){
 	/*
-	This function computes the body-force field for the Euler solver. 
+	This function computes the body-force source term according to Thollet's BFM formulation
 	*/
     /*--- Load all relevant values from config file ---*/
     unsigned long iPoint;
@@ -204,7 +287,8 @@ void CBodyForceModelSolver::BFM_Thollet(CConfig *config, CGeometry *geometry, CS
     /*--- Initialize common variables ---*/
     su2double pi = M_PI, pitch;
 	su2double radius, ax;
-	su2double W_ax, W_r, W_th, W;
+	su2double W_mag;
+	su2double *W;
 	su2double bfFac, b, Nx, Nt, Nr, x_le, rotFac, BF_blades;
 	su2double WdotN, W_nx, W_nth, W_nr, W_px, W_pth, W_pr, W_p;
 	su2double delta, V_sound, M_rel;
@@ -222,203 +306,168 @@ void CBodyForceModelSolver::BFM_Thollet(CConfig *config, CGeometry *geometry, CS
 		
 		// Extracting node coordinates 
         Coord_i = geometry->node[iPoint]->GetCoord();
-		// // In order to determine the relative velocity components, the local unit vectors in axial
-		// // ,radial and tangential direction have to be determined.
+			
+		// Getting interpolated geometric parameters from node
+		Geometric_Parameters = fluidsolver->node[iPoint]->GetBodyForceParameters();
+
+		bfFac = Geometric_Parameters[0]; 	// Body-force factor. Multiplies all body-forces.
+		b = Geometric_Parameters[1];			// Metal blockage factor
+		Nx = Geometric_Parameters[2]; 		// Camber normal component in axial direction
+		Nt = Geometric_Parameters[3]; 			// Camber normal component in tangential direction
+		Nr = Geometric_Parameters[4];			// Camber normal component in radial direction
+		x_le = Geometric_Parameters[5]; 		// Axial distance from leading edge
+		rotFac = Geometric_Parameters[6];	// Rotation factor. Multiplies the body-force rotation value.
+		BF_blades = Geometric_Parameters[7];				// Blade row blade count
 		
-		// rot_dot_x = 0;	// dot product between axial unit vector and coordinate vector
-		// rot_dot_rot = 0;	// dot product of axial unit vector
-		// radius = 0;	// Radial coordinate
-		// ax = 0;		// Axial coordinate
-		// if (nDim == 3){
-		// 	// Computing axial dot products
-		// 	for(int iDim = 0; iDim < nDim; iDim ++){
-		// 		rot_dot_x += Rotation_vector[iDim]*Coord_i[iDim];
-		// 		rot_dot_rot += Rotation_vector[iDim]* Rotation_vector[iDim];
-		// 	}
-		// 	//
-		// 	for(int iDim = 0; iDim < nDim; iDim ++){
-		// 		axial_vector[iDim] = (rot_dot_x/rot_dot_rot)* Rotation_vector[iDim]; // Parallel projection of coordinate vector onto rotation axis
-		// 		radial_vector[iDim] = Coord_i[iDim] - axial_vector[iDim];	// Orthogonal projection of coordinate vector onto rotation axis
-		// 		ax += axial_vector[iDim]*axial_vector[iDim];	
-		// 		radius += radial_vector[iDim]*radial_vector[iDim];
-		// 		i_ax[iDim] = Rotation_vector[iDim];	// Appending axial unit vector component
-		// 	}
-		// 	radius = sqrt(radius); // Computing radial coordinate
-		// 	ax = sqrt(ax);	// Compuring axial coordinate
-		// 	if(rot_dot_x < 0.0){ax = -ax;}	// In case the coordinate parallel projection is negative, the axial coordinate is flipped
+		// Getting relative velocity vector
+		W = relative_vel[iPoint];
 
-		// 	// Computing tangential unit vector components through cross product of radial and axial vectors
-		// 	i_theta[0] = (i_ax[1]*radial_vector[2] - i_ax[2]*radial_vector[1])/radius;
-		// 	i_theta[1] = (-i_ax[0]*radial_vector[2] + i_ax[2]*radial_vector[0])/radius;
-		// 	i_theta[2] = (i_ax[0]*radial_vector[1] - i_ax[1]*radial_vector[0])/radius;
+		// Getting cylindrical coordinates
+		ax = cyl_coordinates[iPoint][0];
+		radius = cyl_coordinates[iPoint][1];
 
-		// 	// Computing radial unit vector through normilization of radial vector
-		// 	for(int iDim = 0; iDim < nDim; iDim ++){i_r[iDim] = radial_vector[iDim]/radius;}
-			
-		// 	// Currently, the method is incompatible with 2D simulations
-		// 	}else{
-		// 	radius = BF_radius;
-		// 	ax = Coord_i[0];
-		// 	}	
-			
-			
-			Geometric_Parameters = fluidsolver->node[iPoint]->GetBodyForceParameters();
-			bfFac = Geometric_Parameters[0]; 	// Body-force factor. Multiplies all body-forces.
-			b = Geometric_Parameters[1];			// Metal blockage factor
-			Nx = Geometric_Parameters[2]; 		// Camber normal component in axial direction
-			Nt = Geometric_Parameters[3]; 			// Camber normal component in tangential direction
-			Nr = Geometric_Parameters[4];			// Camber normal component in radial direction
-			x_le = Geometric_Parameters[5]; 		// Axial distance from leading edge
-			rotFac = Geometric_Parameters[6];	// Rotation factor. Multiplies the body-force rotation value.
-			BF_blades = Geometric_Parameters[7];				// Blade row blade count
-			
-			// // Computing relative velocity components in axial, radial and tangential direction
-			// W_ax = 0;
-			// W_r = 0;
-			// W_th = 0;
-
-
-			W_ax = relative_vel[0][iPoint];
-			W_th = relative_vel[1][iPoint];
-			W_r = relative_vel[2][iPoint];
-
-			ax = cyl_coordinates[0][iPoint];
-			radius = cyl_coordinates[1][iPoint];
-
-			// Adding to the relative velocity components through dot product of absolute velocity and respective unit vector
-			// for(int iDim = 0; iDim < nDim; iDim++){
-			// 	W_ax += proj_vector_axial[iDim][iPoint] * U_i[iDim+1]/U_i[0];
-			// 	W_th += proj_vector_tangential[iDim][iPoint] * U_i[iDim+1]/U_i[0];
-			// 	W_r += proj_vector_radial[iDim][iPoint] * U_i[iDim+1]/U_i[0];
-			// }
-			// Induced velocity due to rotation is subtracted from tangential velocity
-			//W_th -= rotFac * omegaR * radius;
-
-			WdotN = W_ax * Nx + W_r * Nr + W_th * Nt;		// Dot product of relative velocity and camber normal vector
-			W_nx = WdotN * Nx, W_nr = WdotN * Nr, W_nth = WdotN * Nt;		// Relative velocity components normal to the blade
-			W_px = W_ax - W_nx, W_pr = W_r - W_nr, W_pth = W_th - W_nth;  // Relative velocity components parallel to the blade 
-			
-			W_p = sqrt(W_px * W_px + W_pr * W_pr + W_pth * W_pth);	// Parallel relative velocity magnitude
-			W = sqrt(W_ax * W_ax + W_r * W_r + W_th * W_th);					// Relative velocity magnitude
-			
-			// Calculating the deviation angle
-			delta = asin(WdotN / W);
-			// Calculating te local, relative Mach number
-			V_sound = sqrt(gamma * R_gas * V_i[0]);
-			M_rel = W / V_sound;
-			
-			// Blade pitch 
-			pitch = 2 * pi * radius / BF_blades;
+		WdotN = W[0] * Nx + W[2] * Nr + W[1] * Nt;		// Dot product of relative velocity and camber normal vector
+		W_nx = WdotN * Nx, W_nr = WdotN * Nr, W_nth = WdotN * Nt;		// Relative velocity components normal to the blade
+		W_px = W[0] - W_nx, W_pr = W[2] - W_nr, W_pth = W[1] - W_nth;  // Relative velocity components parallel to the blade 
 		
-			// Starting the process of calculating the actual body-force magnitudes
-			
-			
-			// Incompressible normal force magnitude 
-			F_n_inc = pi * delta * (1 / pitch) * (1 / abs(Nt)) * (1 / b) * W * W;
-			
-			// Calculating the friction factor for parallel force calculation
-			
-			
-			// Axial Reynolds number, based on leading edge distance.
-			Re_x = (abs(ax - x_le) * W * U_i[0]) / mu;
-			if(Re_x == 0.0){
-				Re_x = (0.001 * W * U_i[0]) / mu;
-			}
-			C_f = 0.0592 * pow(Re_x, -0.2) ;
+		W_p = sqrt(W_px * W_px + W_pr * W_pr + W_pth * W_pth);	// Parallel relative velocity magnitude
+		W_mag = sqrt(W[0] * W[0] + W[1] * W[1] + W[2] * W[2]);					// Relative velocity magnitude
 		
-			// Calculating the normal force compressibility factor
-			if (M_rel < 1) {
-				Kprime = 1 / (sqrt(1 - (M_rel * M_rel)));
-				if (Kprime <= 3) {
-					K = Kprime;
-				}
-				if (Kprime > 3) {
-					K = 3;
-				}
-			}
-			if (M_rel > 1) {
-				Kprime = 2 / (pi * sqrt((M_rel * M_rel) - 1));
-				if (Kprime <= 3) {
-					K = Kprime;
-				}
-				if (Kprime > 3) {
-					K = 3;
-				}
-			}
+		// Calculating the deviation angle
+		delta = asin(WdotN / W_mag);
+		// Calculating te local, relative Mach number
+		V_sound = sqrt(gamma * R_gas * V_i[0]);
+		M_rel = W_mag / V_sound;
 		
-			
-			// Calculating the final values for the normal and parallel force
-			F_n = -bfFac * K * F_n_inc;
-			F_p = -bfFac * C_f * W * W * (1 / pitch) * (1 / abs(Nt)) * (1 / b);
-			
-			
-			// Transforming the normal and parallel force components to cyllindrical coordinates
-			
-			F_ax = F_n * (cos(delta) * Nx - sin(delta) * (W_px / W_p)) + F_p * W_ax / W;
-			F_r = F_n * (cos(delta) * Nr - sin(delta) * (W_pr / W_p)) + F_p * W_r / W;
-			F_th = F_n * (cos(delta) * Nt - sin(delta) * (W_pth / W_p)) + F_p * W_th / W;
-			e_source = rotFac * Rotation_rate * radius * F_th;
-			
-			// Appending Cartesial body-forces to body-force vector
-			// for(int iDim=0; iDim<nDim; iDim++){
-			// 	F[iDim] = U_i[0] * (F_ax*i_ax[iDim] + F_th*i_theta[iDim] + F_r*i_r[iDim]);
-			// }
-						// Appending Cartesial body-forces to body-force vector
-			for(int iDim=0; iDim<nDim; iDim++){
-				F[iDim] = U_i[0] * (F_ax*proj_vector_axial[iDim][iPoint] + F_th*proj_vector_tangential[iDim][iPoint] + F_r*proj_vector_radial[iDim][iPoint]);
+		// Blade pitch 
+		pitch = 2 * pi * radius / BF_blades;
+	
+		
+		// Incompressible normal force magnitude 
+		F_n_inc = pi * delta * (1 / pitch) * (1 / abs(Nt)) * (1 / b) * W_mag * W_mag;
+		
+		
+		// Axial Reynolds number, based on leading edge distance.
+		Re_x = (abs(ax - x_le) * W_mag * U_i[0]) / mu;
+		if(Re_x == 0.0){
+			Re_x = (0.001 * W_mag * U_i[0]) / mu;
+		}
+		C_f = 0.0592 * pow(Re_x, -0.2) ;
+	
+		// Calculating the normal force compressibility factor
+		if (M_rel < 1) {
+			Kprime = 1 / (sqrt(1 - (M_rel * M_rel)));
+			if (Kprime <= 3) {
+				K = Kprime;
 			}
-			// Appending source term values to the body-force source term vector
-			BF_source[0] = 0.0;	// empty density component
-			// Appending momentum source terms
-			for(int iDim = 0; iDim < nDim; iDim ++) {
-				BF_source[iDim + 1] = F[iDim];
+			if (Kprime > 3) {
+				K = 3;
 			}
-				// Appending energy source term
-			BF_source[nDim+1] = U_i[0] * e_source;
-			fluidsolver->node[iPoint]->SetBody_Force_Source(BF_source);
-			//fluidsolver->node[iPoint]->SetBodyForceVector_Turbo(BF_source);
-		};
+		}
+		if (M_rel > 1) {
+			Kprime = 2 / (pi * sqrt((M_rel * M_rel) - 1));
+			if (Kprime <= 3) {
+				K = Kprime;
+			}
+			if (Kprime > 3) {
+				K = 3;
+			}
+		}
+	
+		
+		// Calculating the final values for the normal and parallel body-force
+		F_n = -bfFac * K * F_n_inc;
+		F_p = -bfFac * C_f * W_mag * W_mag * (1 / pitch) * (1 / abs(Nt)) * (1 / b);
+		
+		
+		// Transforming the normal and parallel force components to cyllindrical coordinates
+		
+		F_ax = F_n * (cos(delta) * Nx - sin(delta) * (W_px / W_p)) + F_p * W[0] / W_mag;
+		F_r = F_n * (cos(delta) * Nr - sin(delta) * (W_pr / W_p)) + F_p * W[2] / W_mag;
+		F_th = F_n * (cos(delta) * Nt - sin(delta) * (W_pth / W_p)) + F_p * W[1] / W_mag;
+		e_source = rotFac * Rotation_rate * radius * F_th;
+		
+		// Appending Cartesial body-forces to body-force vector
+		for(int iDim=0; iDim<nDim; iDim++){
+			F[iDim] = U_i[0] * (F_ax*proj_vector_axial[iPoint][iDim] + F_th*proj_vector_tangential[iPoint][iDim] + F_r*proj_vector_radial[iPoint][iDim]);
+		}
+
+		// Appending source term values to the body-force source term vector
+		BF_source[0] = 0.0;	// empty density component
+
+		// Appending momentum source terms
+		for(int iDim = 0; iDim < nDim; iDim ++) {
+			BF_source[iDim + 1] = F[iDim];
+		}
+
+		// Appending energy source term
+		BF_source[nDim+1] = U_i[0] * e_source;
+
+		// Storing BFM source term in node
+		fluidsolver->node[iPoint]->SetBody_Force_Source(BF_source);
+	};
 	
 };
-void CBodyForceModelSolver::AllocateMemory(){
-	rows_axial.resize(n_rows);
-	rows_axial_chord.resize(n_rows);
-	rows_blade_count.resize(n_rows);
-	rows_blockage.resize(n_rows);
-	rows_Nr.resize(n_rows);
-	rows_Nt.resize(n_rows);
-	rows_Nx.resize(n_rows);
-	rows_radial.resize(n_rows);
-	rows_rotation.resize(n_rows);
-	rows_X_le.resize(n_rows);
-	for(int i_row=0; i_row<n_rows; i_row++){
-		rows_axial.at(i_row).resize(n_sec);
-		rows_axial_chord.at(i_row).resize(n_sec);
-		rows_blockage.at(i_row).resize(n_sec);
-		rows_Nr.at(i_row).resize(n_sec);
-		rows_Nt.at(i_row).resize(n_sec);
-		rows_Nx.at(i_row).resize(n_sec);
-		rows_radial.at(i_row).resize(n_sec);
-		rows_X_le.at(i_row).resize(n_sec);
-		for(int i_sec=0; i_sec<n_sec; i_sec++){
-			rows_axial.at(i_row).at(i_sec).resize(n_axial);
-			rows_axial_chord.at(i_row).at(i_sec).resize(n_axial);
-			rows_blockage.at(i_row).at(i_sec).resize(n_axial);
-			rows_Nr.at(i_row).at(i_sec).resize(n_axial);
-			rows_Nt.at(i_row).at(i_sec).resize(n_axial);
-			rows_Nx.at(i_row).at(i_sec).resize(n_axial);
-			rows_radial.at(i_row).at(i_sec).resize(n_axial);
-			rows_X_le.at(i_row).at(i_sec).resize(n_axial);
+void CBodyForceModelSolver::AllocateMemory(CGeometry *geometry){
+	/*
+	This function allocates memory for all the relevant BFM properties. Mainly for the cylindrical projection vectors and interpolation data
+	*/
+	unsigned long n_points = geometry->GetnPoint();
+	unsigned short nDim = geometry->GetnDim();
+	
+	// Allocating memory for cylindrical projection vectors and coordinates
+	proj_vector_axial  = new su2double*[n_points];
+	proj_vector_tangential  = new su2double*[n_points];
+	proj_vector_radial  = new su2double*[n_points];
+	relative_vel = new su2double*[n_points];
+	cyl_coordinates = new su2double*[n_points];
+	for(unsigned long iPoint=0; iPoint<n_points; iPoint++){
+		proj_vector_axial[iPoint] = new su2double[nDim];
+		proj_vector_tangential[iPoint] = new su2double[nDim];
+		proj_vector_radial[iPoint] = new su2double[nDim];
+		relative_vel[iPoint] = new su2double[nDim];
+		cyl_coordinates[iPoint] = new su2double[2];
+	}
+
+	// Allocating memory for the BFM interpolation data
+	row_blade_count = new su2double[n_rows];
+	row_rotation = new su2double[n_rows];
+
+	ax_coordinate = new su2double**[n_rows];
+	rad_coordinate = new su2double**[n_rows];
+	camber_normal_data = new su2double***[n_rows];
+	blockage_data = new su2double**[n_rows];
+	X_le_data = new su2double**[n_rows];
+	chord_data = new su2double**[n_rows];
+
+	for(unsigned long i_p=0; i_p<n_rows; i_p++){
+		ax_coordinate[i_p] = new su2double*[n_sec];
+		rad_coordinate[i_p] = new su2double*[n_sec];
+		camber_normal_data[i_p] = new su2double**[n_sec];
+		blockage_data[i_p] = new su2double*[n_sec];
+		X_le_data[i_p] = new su2double*[n_sec];
+		chord_data[i_p] = new su2double*[n_sec];
+		for(unsigned long i_sec=0; i_sec<n_sec; i_sec++){
+			ax_coordinate[i_p][i_sec] = new su2double[n_axial];
+			rad_coordinate[i_p][i_sec] = new su2double[n_axial];
+			camber_normal_data[i_p][i_sec] = new su2double*[n_axial];
+			blockage_data[i_p][i_sec] = new su2double[n_axial];
+			X_le_data[i_p][i_sec] = new su2double[n_axial];
+			chord_data[i_p][i_sec] = new su2double[n_axial];
+			for(unsigned long i_ax=0; i_ax<n_axial; i_ax++){
+				camber_normal_data[i_p][i_sec][i_ax] = new su2double[3];
+			}
 		}
 	}
 }
 void CBodyForceModelSolver::ReadInputFile(CConfig *config, CGeometry *geometry){
+	/*
+	This function reads the BFM input file and stores the interpolation data in the respective data structures accordingly. 
+	*/
     cout << "Reading Body Force Model geometry input file" <<endl;
 
-    int start_line = 0;
-	int end_line = 0;
+	// Problem dimension count
     nDim = geometry->GetnDim();
-    
     
 	string line;
 	// Opening body-force model input file
@@ -426,39 +475,32 @@ void CBodyForceModelSolver::ReadInputFile(CConfig *config, CGeometry *geometry){
 	
 	// Reading number of blade rows, number of radial blade sections and axial points from first line
 	inputFile >> n_rows >> n_sec >> n_axial;
-    //TODO:check for proper values of n_rows, n_blade and n_points
-	AllocateMemory();
+
+	// Allocating memory based on interpolation data size
+	AllocateMemory(geometry);
 
 	su2double axial_coordinate, radial_coordinate, N_axial, N_tangential, N_radial,
-	blockage_factor, axial_c_LE, axial_chord, rotation_factor;
-	int blade_count;
-    for (int q=0; q < n_rows; q++){
-		for (int p=0; p < n_sec; p++){
+	blockage_factor, axial_c_LE, axial_chord, rotation_factor, blade_count;
+
+	// Looping over blade rows, radial sections and axial points to store interpolation data
+    for (int i_row=0; i_row < n_rows; i_row++){
+		for (int i_sec=0; i_sec < n_sec; i_sec++){
+			// Skipping radial section header line
 			getline(inputFile, line);
-			start_line = p * n_axial + 1;
-			end_line = (p + 1) * n_axial;
-			for (int i=0; i<n_axial; i++){
+			for (int i_ax=0; i_ax<n_axial; i_ax++){
 				getline(inputFile, line);
 				// Storing values read on the line
-				inputFile >> axial_coordinate >> radial_coordinate >> N_axial >> N_tangential >> N_radial >> blockage_factor >> axial_c_LE >> axial_chord >> rotation_factor >> blade_count;
-				rows_axial_chord.at(q).at(p).at(i) = axial_chord;
-				rows_axial.at(q).at(p).at(i) = axial_coordinate;
-				rows_radial.at(q).at(p).at(i) = radial_coordinate;
-				rows_Nx.at(q).at(p).at(i) = N_axial;
-				rows_Nt.at(q).at(p).at(i) = N_tangential;
-				rows_Nr.at(q).at(p).at(i) = N_radial;
-				rows_blockage.at(q).at(p).at(i) = blockage_factor;
-				rows_X_le.at(q).at(p).at(i) = axial_c_LE;
-
-				// section_axial.push_back(axial_coordinate);
-				// section_radial.push_back(radial_coordinate);
-				// section_Nx.push_back(N_axial);
-				// section_Nt.push_back(N_tangential);
-				// section_Nr.push_back(N_radial);
-				// section_blockage.push_back(blockage_factor);
-				// section_X_le.push_back(axial_c_LE);
-				// section_axial_chord.push_back(axial_chord);
-				// section_rotation.push_back(rotation_factor);
+				inputFile >> ax_coordinate[i_row][i_sec][i_ax] 
+				>> rad_coordinate[i_row][i_sec][i_ax] 
+				>> camber_normal_data[i_row][i_sec][i_ax][0]
+				>> camber_normal_data[i_row][i_sec][i_ax][1]
+				>> camber_normal_data[i_row][i_sec][i_ax][2]
+				>> blockage_data[i_row][i_sec][i_ax]
+				>> X_le_data[i_row][i_sec][i_ax]
+				>> chord_data[i_row][i_sec][i_ax]
+				>> rotation_factor 
+				>> blade_count;
+				
 				if(axial_coordinate <= x_min){
 					x_min = axial_coordinate;
 				}
@@ -466,38 +508,28 @@ void CBodyForceModelSolver::ReadInputFile(CConfig *config, CGeometry *geometry){
 				
 				
 			}
-			// blade_axial.push_back(section_axial);
-			// blade_radial.push_back(section_radial);
-			// blade_Nx.push_back(section_Nx);
-			// blade_Nt.push_back(section_Nt);
-			// blade_Nr.push_back(section_Nr);
-			// blade_blockage.push_back(section_blockage);
-			// blade_X_le.push_back(section_X_le);
-			// blade_axial_chord.push_back(section_axial_chord);
 		}
-		// rows_axial.push_back(blade_axial);
-		// rows_radial.push_back(blade_radial);
-		// rows_Nx.push_back(blade_Nx);
-		// rows_Nt.push_back(blade_Nt);
-		// rows_Nr.push_back(blade_Nr);
-		// rows_blockage.push_back(blade_blockage);
-		// rows_X_le.push_back(blade_X_le);
-		// rows_axial_chord.push_back(blade_axial_chord);
-		rows_rotation.at(q) = rotation_factor;
-		rows_blade_count.at(q) = blade_count;
+		row_rotation[i_row] = rotation_factor;	// Blade row rotation factor
+		row_blade_count[i_row] = blade_count;	// Blade row blade count
 
 	}
+	inputFile.close();
 }
 void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *config, CSolver *fluidSolver){
+	/*
+	This function interpolates the BFM interpolation data onto the mesh nodes and stores the data locally. 
+	*/
 	cout << "Interpolating geometric parameters to mesh" << endl;
-  unsigned long iPoint;
-  unsigned short iMesh, iDim;
-  unsigned short iZone = config->GetiZone();
+  	unsigned long iPoint;
+  	unsigned short iMesh, iDim;
+  	unsigned short iZone = config->GetiZone();
 	su2double BF_radius = config->GetBody_Force_Radius();	
 	// Subtracting 1 meter from minimum axial coordinate to ensure it's located outside of the domain
 	x_min = x_min - 1.0;
 	
+	// Initializing values for the BFM geometric parameters
 	su2double b=1.0, Nx = 0.0, Nt = 1.0, Nr = 0.0, bfFac = 0.0, x_le = 0.0, rotFac = 0.0, bladeCount = 1, chord = 1.0;
+	// BFM parameter array
 	su2double BodyForceParams[9] = {bfFac, b, Nx, Nt, Nr, x_le, rotFac, bladeCount, chord};
 	
 	su2double x1, x2, r1, r2;
@@ -509,40 +541,17 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
 	su2double rot_dot_x, rot_dot_rot;
 	su2double axial[nDim], radial[nDim];
 	su2double x_side [4][2] {{0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}};
-	//vector<vector<su2double>> x_side;
 	vector<su2double> blockage_side, Nx_side, Nt_side, Nr_side, x_le_side, chord_side;
 	vector<su2double> edge {0, 0}, v_x {0, 0}, v_opp {0, 0}, proj_x {0, 0}, proj_opp {0, 0};
 	su2double orientation;
 	// Looping over points in the domain to interpolate body-force parameters onto the respective cells
 	for (iPoint = 0; iPoint < geometry->GetnPoint(); iPoint++){
-		su2double *Coord = geometry->node[iPoint]->GetCoord(); // Coordinate vector
-		rot_dot_x = 0;	// dot product between rotation axis and coordinate vector
-		rot_dot_rot = 0;	// dot product of rotation axis
-		cell_axial_coordinate = 0;
-		cell_radial_coordinate = 0;
-		if (nDim == 3){
-			// Computing dot products
-			for(int iDim = 0; iDim < nDim; iDim ++){
-				rot_dot_x += Rotation_vector[iDim]*Coord[iDim];
-				rot_dot_rot += Rotation_vector[iDim]* Rotation_vector[iDim];
-			}
-			for(int iDim = 0; iDim < nDim; iDim ++){
-				axial[iDim] = (rot_dot_x/rot_dot_rot)* Rotation_vector[iDim]; // computing axial coordinate through parallel projection of coordinate vector onto rotation axis
-				radial[iDim] = Coord[iDim] - axial[iDim];	// computing radial vector through normal projection of coordinate vector onto rotation axis
-				cell_axial_coordinate += axial[iDim]*axial[iDim];
-				cell_radial_coordinate += radial[iDim]*radial[iDim];
-			}
-			
-			cell_axial_coordinate = sqrt(cell_axial_coordinate);	// Computing axial coordinate
-			if(rot_dot_x < 0.0){cell_axial_coordinate = -cell_axial_coordinate;}	// In case parallel projection is negative, axial coordinate is flipped
-			cell_radial_coordinate = sqrt(cell_radial_coordinate);	// Computing radial coordinatecout << iPoint << " " << Coord[0] << " " << Coord[1] << " " << Coord[2] << " " << cell_axial_coordinate << " " << cell_radial_coordinate << " " << sqrt(Coord[0]*Coord[0] + Coord[1]*Coord[1])<< endl;
-		}else{
-			cell_radial_coordinate = BF_radius;
-			cell_axial_coordinate = Coord[0];
-		}
-		//su2double b=1.0, Nx = 0.0, Nt = 1.0, Nr = 0.0, bfFac = 0.0, x_le = 0.0, rotFac = 0.0, bladeCount = 1, chord = 1.0;
-		//su2double BodyForceParams[9] = {bfFac, b, Nx, Nt, Nr, x_le, rotFac, bladeCount, chord};
-		// Initializing body-force parameters with outside values
+
+		// Getting cylindrical coordinates for current cell
+		cell_axial_coordinate = cyl_coordinates[iPoint][0];
+		cell_radial_coordinate = cyl_coordinates[iPoint][1];
+
+		// Setting default BodyForceParams vector with farfield values
 		b = 1.0;
 		Nx = 0.0;
 		Nt = 1.0;
@@ -552,7 +561,6 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
 		rotFac = 0.0;
 		bladeCount = 1;
 		chord = 1.0;
-		//su2double BodyForceParams[9] = {bfFac, b, Nx, Nt, Nr, x_le, rotFac, bladeCount, chord};
 		BodyForceParams[0] = bfFac;
 		BodyForceParams[1] = b;
 		BodyForceParams[2] = Nx;
@@ -562,38 +570,36 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
 		BodyForceParams[6] = rotFac;
 		BodyForceParams[7] = bladeCount;
 		BodyForceParams[8] = chord;
-
 		
-		
+		// Looping over blade rows
 		for (int q=0; q < n_rows; q++){
+			// Looping over radial sections
 			for(int j=0; j < n_sec-1; j++){
+				// Looping over axial points
 				for(int n = 0; n < n_axial - 1; n++){
 					// Appending interpolation values to sides loop
-					x_side[0][0] = rows_axial.at(q).at(j).at(n);
-					x_side[0][1] = rows_radial.at(q).at(j).at(n);
-					x_side[1][0] = rows_axial.at(q).at(j+1).at(n);
-					x_side[1][1] = rows_radial.at(q).at(j+1).at(n);
-					x_side[2][0] = rows_axial.at(q).at(j+1).at(n+1);
-					x_side[2][1] = rows_radial.at(q).at(j+1).at(n+1);
-					x_side[3][0] = rows_axial.at(q).at(j).at(n+1);
-					x_side[3][1] = rows_radial.at(q).at(j).at(n+1);
-					// x_side = {{rows_axial.at(q).at(j).at(n), rows_radial.at(q).at(j).at(n)},
-					// 			{rows_axial.at(q).at(j+1).at(n), rows_radial.at(q).at(j+1).at(n)},
-					// 			{rows_axial.at(q).at(j+1).at(n+1),rows_radial.at(q).at(j+1).at(n+1)},
-					// 			{rows_axial.at(q).at(j).at(n+1),rows_radial.at(q).at(j).at(n+1)}};
-					blockage_side = {rows_blockage.at(q).at(j).at(n), rows_blockage.at(q).at(j+1).at(n), rows_blockage.at(q).at(j+1).at(n+1), rows_blockage.at(q).at(j).at(n+1)};
-					Nx_side = {rows_Nx.at(q).at(j).at(n), rows_Nx.at(q).at(j+1).at(n), rows_Nx.at(q).at(j+1).at(n+1), rows_Nx.at(q).at(j).at(n+1)};
-					Nt_side = {rows_Nt.at(q).at(j).at(n), rows_Nt.at(q).at(j+1).at(n), rows_Nt.at(q).at(j+1).at(n+1), rows_Nt.at(q).at(j).at(n+1)};
-					Nr_side = {rows_Nr.at(q).at(j).at(n), rows_Nr.at(q).at(j+1).at(n), rows_Nr.at(q).at(j+1).at(n+1), rows_Nr.at(q).at(j).at(n+1)};
-					x_le_side = {rows_X_le.at(q).at(j).at(n), rows_X_le.at(q).at(j+1).at(n), rows_X_le.at(q).at(j+1).at(n+1), rows_X_le.at(q).at(j).at(n+1)};
-					chord_side = {rows_axial_chord.at(q).at(j).at(n), rows_axial_chord.at(q).at(j+1).at(n), rows_axial_chord.at(q).at(j+1).at(n+1), rows_axial_chord.at(q).at(j).at(n+1)};
-					nInt = 0; // number of intersections
-					inside = true;	// point is outside of the blade region by default
-					// Looping over sides to count number of intersections
-					
+					x_side[0][0] = ax_coordinate[q][j][n];
+					x_side[0][1] = rad_coordinate[q][j][n];
+					x_side[1][0] = ax_coordinate[q][j+1][n];
+					x_side[1][1] = rad_coordinate[q][j+1][n];
+					x_side[2][0] = ax_coordinate[q][j+1][n+1];
+					x_side[2][1] = rad_coordinate[q][j+1][n+1];
+					x_side[3][0] = ax_coordinate[q][j][n+1];
+					x_side[3][1] = rad_coordinate[q][j][n+1];
+		
+					// Interpolation data along interpolation cell
+					blockage_side = {blockage_data[q][j][n], blockage_data[q][j+1][n], blockage_data[q][j+1][n+1], blockage_data[q][j][n+1]};
+					Nx_side = {camber_normal_data[q][j][n][0], camber_normal_data[q][j+1][n][0], camber_normal_data[q][j+1][n+1][0], camber_normal_data[q][j][n+1][0]};
+					Nt_side = {camber_normal_data[q][j][n][1], camber_normal_data[q][j+1][n][1], camber_normal_data[q][j+1][n+1][1], camber_normal_data[q][j][n+1][1]};
+					Nr_side = {camber_normal_data[q][j][n][2], camber_normal_data[q][j+1][n][2], camber_normal_data[q][j+1][n+1][2], camber_normal_data[q][j][n+1][2]};
+					x_le_side = {X_le_data[q][j][n], X_le_data[q][j+1][n], X_le_data[q][j+1][n+1], X_le_data[q][j][n+1]};
+					chord_side = {chord_data[q][j][n], chord_data[q][j+1][n], chord_data[q][j+1][n+1], chord_data[q][j][n+1]};
+
+					inside = true;	// point is inside of the blade region by default
+					// Looping over sides to check for inclusion
 					for(int p=0; p < 4; p++){
-						int p_next = (p+1) % 4;
-						int p_opp = (p+2) % 4;
+						int p_next = (p+1) % 4; // Next corner index
+						int p_opp = (p+2) % 4; // Opposite corner index
 						
 						edge.at(0) = x_side[p_next][0] - x_side[p][0];
 						edge.at(1) = x_side[p_next][1] - x_side[p][1];
@@ -629,11 +635,14 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
 						Nt = eNum_Nt / deNom;
 						Nr = eNum_Nr / deNom;
 						x_le = eNum_x_le / deNom;
-						rotFac = rows_rotation.at(q);
-						bladeCount = rows_blade_count.at(q);
+						rotFac = row_rotation[q];
+						bladeCount = row_blade_count[q];
 						chord = eNum_chord / deNom;
+						q = n_rows;
+						j = n_sec;
+						n = n_axial;
 					}
-					// Storing interpolated geometric parameters into vector
+					//Storing interpolated geometric parameters into vector
 					BodyForceParams[0] = bfFac;
 					BodyForceParams[1] = b;
 					BodyForceParams[2] = Nx;
@@ -646,162 +655,163 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
 				}
 			}
 		}
+		
 		// Storing body-force parameter vector onto node
 		fluidSolver->node[iPoint]->SetBodyForceParameters(BodyForceParams);
-		//cout << x << ", "  << r << ", " << BodyForceParams[0] << ", " << BodyForceParams[1] << ", " << BodyForceParams[2] << ", " << BodyForceParams[3] << ", " << BodyForceParams[4] << endl;
 	}
 }
 
 void CBodyForceModelSolver::ComputeBlockageGradient(CGeometry *geometry, CConfig *config, CSolver *fluidSolver){
-	cout << "Computing metal blockage factor gradient field" << endl;
-  unsigned short iDim, jDim, iNeigh;
-  unsigned long iPoint, jPoint;
-  su2double Blockage_i, Blockage_j, *BFMVec, *Coord_i, *Coord_j, r11, r12, r13, r22, r23, r23_a,
-  r23_b, r33, weight, product, z11, z12, z13, z22, z23, z33, detR2, cvector[nDim], smatrix[nDim][nDim];
-  bool singular;
-  
-  /*--- Loop over points of the grid ---*/
-  
-  for (iPoint = 0; iPoint < geometry->GetnPoint(); iPoint++) {
-    
-    /*--- Set the value of the singular ---*/
-    singular = false;
-    
-    /*--- Get coordinates ---*/
-    
-    Coord_i = geometry->node[iPoint]->GetCoord();
-    //cout << "Coordinate: " << Coord_i[0] << " " << Coord_i[1] << endl;
-    /*--- Get primitives from CVariable ---*/
-    BFMVec = fluidSolver->node[iPoint]->GetBodyForceParameters();
-    Blockage_i = BFMVec[1];
-    //cout << "Blockage: " << Blockage_i << endl;
-    /*--- Inizialization of variables ---*/
-    
-    
-    for (iDim = 0; iDim < nDim; iDim++){
-        cvector[iDim] = 0.0;
-    }
-    r11 = 0.0; r12 = 0.0;   r13 = 0.0;    r22 = 0.0;
-    r23 = 0.0; r23_a = 0.0; r23_b = 0.0;  r33 = 0.0;
-    
 	/*
-    AD::StartPreacc();
-    AD::SetPreaccIn(PrimVar_i, nPrimVarGrad);
-    AD::SetPreaccIn(Coord_i, nDim);
-    */
-    for (iNeigh = 0; iNeigh < geometry->node[iPoint]->GetnPoint(); iNeigh++) {
-      jPoint = geometry->node[iPoint]->GetPoint(iNeigh);
-      Coord_j = geometry->node[jPoint]->GetCoord();
-      
-	  BFMVec = fluidSolver->node[jPoint]->GetBodyForceParameters();
-      Blockage_j = BFMVec[1];
-      
-	  /*
-      AD::SetPreaccIn(Coord_j, nDim);
-      AD::SetPreaccIn(PrimVar_j, nPrimVarGrad);
-	  */
-	  
-      weight = 0.0;
-      for (iDim = 0; iDim < nDim; iDim++)
-        weight += (Coord_j[iDim]-Coord_i[iDim])*(Coord_j[iDim]-Coord_i[iDim]);
-      
-      /*--- Sumations for entries of upper triangular matrix R ---*/
-      //cout << "Weight: " << weight << endl;
-      if (weight != 0.0) {
-        
-        r11 += (Coord_j[0]-Coord_i[0])*(Coord_j[0]-Coord_i[0])/weight;
-        r12 += (Coord_j[0]-Coord_i[0])*(Coord_j[1]-Coord_i[1])/weight;
-        r22 += (Coord_j[1]-Coord_i[1])*(Coord_j[1]-Coord_i[1])/weight;
-        
-        if (nDim == 3) {
-          r13 += (Coord_j[0]-Coord_i[0])*(Coord_j[2]-Coord_i[2])/weight;
-          r23_a += (Coord_j[1]-Coord_i[1])*(Coord_j[2]-Coord_i[2])/weight;
-          r23_b += (Coord_j[0]-Coord_i[0])*(Coord_j[2]-Coord_i[2])/weight;
-          r33 += (Coord_j[2]-Coord_i[2])*(Coord_j[2]-Coord_i[2])/weight;
-        }
-        
-        /*--- Entries of c:= transpose(A)*b ---*/
-        
-        
-         for (iDim = 0; iDim < nDim; iDim++){
-            cvector[iDim] += (Coord_j[iDim]-Coord_i[iDim])*(Blockage_j-Blockage_i)/weight;
-		 }
-        
-      }
-      
-    }
-    //cout << " Cvector[0]: " << cvector[0] << " Cvector[1]: " << cvector[1] << endl;
-    /*--- Entries of upper triangular matrix R ---*/
-    
-    if (r11 >= 0.0) r11 = sqrt(r11); else r11 = 0.0;
-    if (r11 != 0.0) r12 = r12/r11; else r12 = 0.0;
-    if (r22-r12*r12 >= 0.0) r22 = sqrt(r22-r12*r12); else r22 = 0.0;
-    //cout << "r11: " << r11 << " r12: " << r12 << " r22: " << r22 << endl;
-    if (nDim == 3) {
-      if (r11 != 0.0) r13 = r13/r11; else r13 = 0.0;
-      if ((r22 != 0.0) && (r11*r22 != 0.0)) r23 = r23_a/r22 - r23_b*r12/(r11*r22); else r23 = 0.0;
-      if (r33-r23*r23-r13*r13 >= 0.0) r33 = sqrt(r33-r23*r23-r13*r13); else r33 = 0.0;
-    }
-    
-    /*--- Compute determinant ---*/
-    
-    if (nDim == 2) detR2 = (r11*r22)*(r11*r22);
-    else detR2 = (r11*r22*r33)*(r11*r22*r33);
-    
-    /*--- Detect singular matrices ---*/
-    
-    if (abs(detR2) <= EPS) { detR2 = 1.0; singular = true; }
-    //cout << "Determinant: " << detR2 << endl;
-    /*--- S matrix := inv(R)*traspose(inv(R)) ---*/
-    
-    if (singular) {
-      for (iDim = 0; iDim < nDim; iDim++)
-        for (jDim = 0; jDim < nDim; jDim++)
-          smatrix[iDim][jDim] = 0.0;
-    }
-    else {
-      if (nDim == 2) {
-        smatrix[0][0] = (r12*r12+r22*r22)/detR2;
-        smatrix[0][1] = -r11*r12/detR2;
-        smatrix[1][0] = smatrix[0][1];
-        smatrix[1][1] = r11*r11/detR2;
-      }
-      else {
-        z11 = r22*r33; z12 = -r12*r33; z13 = r12*r23-r13*r22;
-        z22 = r11*r33; z23 = -r11*r23; z33 = r11*r22;
-        smatrix[0][0] = (z11*z11+z12*z12+z13*z13)/detR2;
-        smatrix[0][1] = (z12*z22+z13*z23)/detR2;
-        smatrix[0][2] = (z13*z33)/detR2;
-        smatrix[1][0] = smatrix[0][1];
-        smatrix[1][1] = (z22*z22+z23*z23)/detR2;
-        smatrix[1][2] = (z23*z33)/detR2;
-        smatrix[2][0] = smatrix[0][2];
-        smatrix[2][1] = smatrix[1][2];
-        smatrix[2][2] = (z33*z33)/detR2;
-      }
-    }
-    //cout << " Smatrix[0][1]: " << smatrix[0][1] <<" Smatrix[1][0]: " << smatrix[1][0] << " Smatrix[1][1]: " << smatrix[1][1] << " Smatrix[0][0]: " << smatrix[0][0] << endl;
-    /*--- Computation of the gradient: S*c ---*/
-    
-      for (iDim = 0; iDim < nDim; iDim++) {
-        product = 0.0;
-        for (jDim = 0; jDim < nDim; jDim++) {
-          product += smatrix[iDim][jDim]*cvector[jDim];
-        }
-        fluidSolver->node[iPoint]->SetGradient_Blockage(iDim, product);
-      }
-    
-    /*
-    AD::SetPreaccOut(node[iPoint]->GetGradient_Primitive(), nPrimVarGrad, nDim);
-    AD::EndPreacc();
+	This function computes the spatial metal blockage gradient field, which is used by Thollet's BFM to account for obstruction due to blade thickness
+	The gradient method used is similar to the Green Gauss method used for computing the gradient of the primary flow variables
 	*/
-  }
+	cout << "Computing metal blockage factor gradient field" << endl;
+	unsigned short iDim, jDim, iNeigh;
+	unsigned long iPoint, jPoint;
+	su2double Blockage_i, Blockage_j, *BFMVec, *Coord_i, *Coord_j, r11, r12, r13, r22, r23, r23_a,
+	r23_b, r33, weight, product, z11, z12, z13, z22, z23, z33, detR2, cvector[nDim], smatrix[nDim][nDim];
+	bool singular;
+	
+	/*--- Loop over points of the grid ---*/
+	
+	for (iPoint = 0; iPoint < geometry->GetnPoint(); iPoint++) {
+		
+		/*--- Set the value of the singular ---*/
+		singular = false;
+		
+		/*--- Get coordinates ---*/
+		
+		Coord_i = geometry->node[iPoint]->GetCoord();
+		/*--- Get primitives from CVariable ---*/
+		BFMVec = fluidSolver->node[iPoint]->GetBodyForceParameters();
+		Blockage_i = BFMVec[1];
+		/*--- Inizialization of variables ---*/
+		
+		
+		for (iDim = 0; iDim < nDim; iDim++){
+			cvector[iDim] = 0.0;
+		}
+		r11 = 0.0; r12 = 0.0;   r13 = 0.0;    r22 = 0.0;
+		r23 = 0.0; r23_a = 0.0; r23_b = 0.0;  r33 = 0.0;
+		
+		/*
+		AD::StartPreacc();
+		AD::SetPreaccIn(PrimVar_i, nPrimVarGrad);
+		AD::SetPreaccIn(Coord_i, nDim);
+		*/
+		for (iNeigh = 0; iNeigh < geometry->node[iPoint]->GetnPoint(); iNeigh++) {
+		jPoint = geometry->node[iPoint]->GetPoint(iNeigh);
+		Coord_j = geometry->node[jPoint]->GetCoord();
+		
+		BFMVec = fluidSolver->node[jPoint]->GetBodyForceParameters();
+		Blockage_j = BFMVec[1];
+		
+		/*
+		AD::SetPreaccIn(Coord_j, nDim);
+		AD::SetPreaccIn(PrimVar_j, nPrimVarGrad);
+		*/
+		
+		weight = 0.0;
+		for (iDim = 0; iDim < nDim; iDim++)
+			weight += (Coord_j[iDim]-Coord_i[iDim])*(Coord_j[iDim]-Coord_i[iDim]);
+		
+		/*--- Sumations for entries of upper triangular matrix R ---*/
+		if (weight != 0.0) {
+			
+			r11 += (Coord_j[0]-Coord_i[0])*(Coord_j[0]-Coord_i[0])/weight;
+			r12 += (Coord_j[0]-Coord_i[0])*(Coord_j[1]-Coord_i[1])/weight;
+			r22 += (Coord_j[1]-Coord_i[1])*(Coord_j[1]-Coord_i[1])/weight;
+			
+			if (nDim == 3) {
+			r13 += (Coord_j[0]-Coord_i[0])*(Coord_j[2]-Coord_i[2])/weight;
+			r23_a += (Coord_j[1]-Coord_i[1])*(Coord_j[2]-Coord_i[2])/weight;
+			r23_b += (Coord_j[0]-Coord_i[0])*(Coord_j[2]-Coord_i[2])/weight;
+			r33 += (Coord_j[2]-Coord_i[2])*(Coord_j[2]-Coord_i[2])/weight;
+			}
+			
+			/*--- Entries of c:= transpose(A)*b ---*/
+			
+			
+			for (iDim = 0; iDim < nDim; iDim++){
+				cvector[iDim] += (Coord_j[iDim]-Coord_i[iDim])*(Blockage_j-Blockage_i)/weight;
+			}
+			
+		}
+		
+		}
+		//cout << " Cvector[0]: " << cvector[0] << " Cvector[1]: " << cvector[1] << endl;
+		/*--- Entries of upper triangular matrix R ---*/
+		
+		if (r11 >= 0.0) r11 = sqrt(r11); else r11 = 0.0;
+		if (r11 != 0.0) r12 = r12/r11; else r12 = 0.0;
+		if (r22-r12*r12 >= 0.0) r22 = sqrt(r22-r12*r12); else r22 = 0.0;
+		if (nDim == 3) {
+		if (r11 != 0.0) r13 = r13/r11; else r13 = 0.0;
+		if ((r22 != 0.0) && (r11*r22 != 0.0)) r23 = r23_a/r22 - r23_b*r12/(r11*r22); else r23 = 0.0;
+		if (r33-r23*r23-r13*r13 >= 0.0) r33 = sqrt(r33-r23*r23-r13*r13); else r33 = 0.0;
+		}
+		
+		/*--- Compute determinant ---*/
+		
+		if (nDim == 2) detR2 = (r11*r22)*(r11*r22);
+		else detR2 = (r11*r22*r33)*(r11*r22*r33);
+		
+		/*--- Detect singular matrices ---*/
+		
+		if (abs(detR2) <= EPS) { detR2 = 1.0; singular = true; }
+		//cout << "Determinant: " << detR2 << endl;
+		/*--- S matrix := inv(R)*traspose(inv(R)) ---*/
+		
+		if (singular) {
+		for (iDim = 0; iDim < nDim; iDim++)
+			for (jDim = 0; jDim < nDim; jDim++)
+			smatrix[iDim][jDim] = 0.0;
+		}
+		else {
+		if (nDim == 2) {
+			smatrix[0][0] = (r12*r12+r22*r22)/detR2;
+			smatrix[0][1] = -r11*r12/detR2;
+			smatrix[1][0] = smatrix[0][1];
+			smatrix[1][1] = r11*r11/detR2;
+		}
+		else {
+			z11 = r22*r33; z12 = -r12*r33; z13 = r12*r23-r13*r22;
+			z22 = r11*r33; z23 = -r11*r23; z33 = r11*r22;
+			smatrix[0][0] = (z11*z11+z12*z12+z13*z13)/detR2;
+			smatrix[0][1] = (z12*z22+z13*z23)/detR2;
+			smatrix[0][2] = (z13*z33)/detR2;
+			smatrix[1][0] = smatrix[0][1];
+			smatrix[1][1] = (z22*z22+z23*z23)/detR2;
+			smatrix[1][2] = (z23*z33)/detR2;
+			smatrix[2][0] = smatrix[0][2];
+			smatrix[2][1] = smatrix[1][2];
+			smatrix[2][2] = (z33*z33)/detR2;
+		}
+		}
+		/*--- Computation of the gradient: S*c ---*/
+		
+		for (iDim = 0; iDim < nDim; iDim++) {
+			product = 0.0;
+			for (jDim = 0; jDim < nDim; jDim++) {
+			product += smatrix[iDim][jDim]*cvector[jDim];
+			}
+			fluidSolver->node[iPoint]->SetGradient_Blockage(iDim, product);
+		}
+		
+		/*
+		AD::SetPreaccOut(node[iPoint]->GetGradient_Primitive(), nPrimVarGrad, nDim);
+		AD::EndPreacc();
+		*/
+	}
 }
 
 void CBodyForceModelSolver::ComputeBFMSources(CConfig *config, CGeometry *geometry, CSolver *fluidsolver){
 	ComputeBodyForce_Source(config, geometry, fluidsolver);
+	SU2_MPI::Barrier(MPI_COMM_WORLD);
 	if(kind_bfm==1){
 		ComputeBlockage_Source(config, geometry, fluidsolver);
+		SU2_MPI::Barrier(MPI_COMM_WORLD);
 	}
 }
 void CBodyForceModelSolver::ComputeBodyForce_Source(CConfig *config, CGeometry *geometry, CSolver *fluidsolver){
@@ -882,20 +892,43 @@ void CBodyForceModelSolver::ComputeBlockage_Source(CConfig *config, CGeometry *g
 }
 
 CBodyForceModelSolver::CBodyForceModelSolver::~CBodyForceModelSolver(){
-	
-	for(size_t ic=0; ic<3; ic++){
-		delete [] proj_vector_axial[ic];
-		delete [] proj_vector_tangential[ic];
-		delete [] proj_vector_radial[ic];
-		delete [] relative_vel[ic];
+	for(unsigned long iPoint=0; iPoint<nPoint_geom; iPoint++){
+		delete [] proj_vector_axial[iPoint];
+		delete [] proj_vector_tangential[iPoint];
+		delete [] proj_vector_radial[iPoint];
+		delete [] relative_vel[iPoint];
+		delete [] cyl_coordinates[iPoint];
 	}
-	delete [] cyl_coordinates[0];
-	delete [] cyl_coordinates[1];
 	delete [] cyl_coordinates;
 	delete [] proj_vector_axial;
 	delete [] proj_vector_tangential;
 	delete [] proj_vector_radial;
 	delete [] relative_vel;
+
+	for(size_t i_row=0; i_row<n_rows; i_row++){
+		for(size_t i_sec=0; i_sec<n_sec; i_sec++){
+			for(size_t i_ax=0; i_ax<n_axial; i_ax++){
+				delete [] camber_normal_data[i_row][i_sec][i_ax];
+			}
+			delete [] ax_coordinate[i_row][i_sec];
+			delete [] rad_coordinate[i_row][i_sec];
+			delete [] camber_normal_data[i_row][i_sec];
+			delete [] blockage_data[i_row][i_sec];
+			delete [] X_le_data[i_row][i_sec];
+		}
+		delete [] ax_coordinate[i_row];
+		delete [] rad_coordinate[i_row];
+		delete [] camber_normal_data[i_row];
+		delete [] blockage_data[i_row];
+		delete [] X_le_data[i_row];
+	}
+	delete [] ax_coordinate;
+	delete [] rad_coordinate;
+	delete [] camber_normal_data;
+	delete [] blockage_data;
+	delete [] X_le_data;
+	delete [] row_rotation;
+	delete [] row_blade_count;
 	cout << "Deleted CBodyForceModel container" << endl;
 }
 

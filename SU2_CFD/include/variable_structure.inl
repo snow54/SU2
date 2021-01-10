@@ -537,7 +537,7 @@ inline void CVariable::SetSolution_Direct(su2double *val_solution_direct) { }
 
 inline void CVariable::SetBodyForceDirect(su2double *val_bodyForce) { }
 
-inline su2double* CVariable::GetBodyForceDirect(void) { }
+
 
 inline su2double* CVariable::GetGeometry_Direct() { return NULL; }
 
@@ -1479,9 +1479,7 @@ inline su2double* CVariable::GetBodyForceVector_Turbo(void){
         return Body_Force_Turbo;
 }
 
-inline su2double* CDiscAdjVariable::GetBodyForceDirect(void){
-    return Body_Force_Turbo_Direct;
-}
+
 
 inline su2double* CDiscAdjVariable::GetGeometry_Direct() { return Geometry_Direct; }
 

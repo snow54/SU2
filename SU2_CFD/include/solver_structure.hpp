@@ -1486,8 +1486,8 @@ public:
    * \param[in] config - Definition of the particular problem.
    */
   virtual void SetPrimitive_Gradient_GG(CGeometry *geometry, CConfig *config);
-  virtual void ComputeBlockageGradient(CGeometry *geometry, CConfig *config);
-  virtual void InterpolateBodyForceParams(CGeometry *geometry, CConfig *config);
+  // virtual void ComputeBlockageGradient(CGeometry *geometry, CConfig *config);
+  // virtual void InterpolateBodyForceParams(CGeometry *geometry, CConfig *config);
   /*!
    * \brief A virtual member.
    * \param[in] geometry - Geometrical definition of the problem.
@@ -4379,10 +4379,6 @@ public:
    */
   virtual void SetDES_LengthScale(CSolver** solver, CGeometry *geometry, CConfig *config);
 
-  virtual void ComputeBodyForce_Turbo(CConfig *config, CGeometry *geometry);
-  
-  virtual void ComputeBlockageVector(CConfig *config, CGeometry *geometry);
-
   virtual void PreprocessBFMParams(CGeometry *geometry, CConfig *config, CSolver *fluidSolver);
 
   virtual  void ComputeBodyForce_Source(CConfig *config, CGeometry *geometry, CSolver *fluidsolver);
@@ -5051,8 +5047,8 @@ public:
    * \param[in] config - Definition of the particular problem.
    */
   void SetPrimitive_Gradient_GG(CGeometry *geometry, CConfig *config);
-  void ComputeBlockageGradient(CGeometry *geometry, CConfig *config);
-  void InterpolateBodyForceParams(CGeometry *geometry, CConfig *config);
+  // void ComputeBlockageGradient(CGeometry *geometry, CConfig *config);
+  // void InterpolateBodyForceParams(CGeometry *geometry, CConfig *config);
   /*!
    * \brief Compute the gradient of the primitive variables using a Least-Squares method,
    *        and stores the result in the <i>Gradient_Primitive</i> variable.
@@ -6953,10 +6949,6 @@ public:
    * \param[in] inMarkerTP - turboperformance marker.
    */
   void SetNuOut(su2double value, unsigned short inMarkerTP, unsigned short valSpan);
-
-  void ComputeBodyForce_Turbo(CConfig *config, CGeometry *geometry);
-  
-  void ComputeBlockageVector(CConfig *config, CGeometry *geometry);
 
 };
 
@@ -15845,22 +15837,22 @@ class CBodyForceModelSolver : public CSolver {
   unsigned short kind_bfm{0};
   su2double *unit_vector_axial;
   su2double *unit_vector_radial;
-  unsigned long iPoint;
+  unsigned long iPoint, nPoint_geom;
   unsigned short iMesh, iDim;
   unsigned short nDim;
   unsigned short n_sec, n_axial, n_rows;
-  vector <vector <vector <su2double>>> rows_axial, rows_radial, rows_Nx, rows_Nt, rows_Nr, 
-  rows_blockage, rows_X_le, rows_axial_chord;
-  vector <int> rows_blade_count;
-  vector <su2double> rows_rotation;
   su2double Rotation_vector [3];
   su2double Rotation_rate;
   su2double x_min=0;
   su2double **proj_vector_axial, **proj_vector_tangential, **proj_vector_radial;
   su2double ** relative_vel;
   su2double **cyl_coordinates;
+  su2double ***ax_coordinate, *** rad_coordinate, ****camber_normal_data, ***blockage_data, ***X_le_data, ***chord_data;
+  
+  su2double *row_blade_count;
+  su2double *row_rotation;
 
-  void AllocateMemory();
+  void AllocateMemory(CGeometry *geometry);
   su2double vector_dot_product(vector<su2double> v_1, vector<su2double> v_2);
   
   void ComputeCylProjections(CGeometry *geometry, CConfig *config, CSolver *solver);

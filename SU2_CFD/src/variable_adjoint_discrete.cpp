@@ -75,13 +75,20 @@ CDiscAdjVariable::CDiscAdjVariable(su2double* val_solution, unsigned short val_n
   }
 
   Solution_Direct = new su2double[nVar];
-  Sensitivity = new su2double[nDim];
-
-  unsigned short iVar,iDim;
-
-  for (iDim = 0; iDim < nDim; iDim++) {
-    Sensitivity[iDim] = 0.0;
+    unsigned short iVar,iDim;
+  if(body_force){
+    Sensitivity = new su2double[9];
+    for( iDim=0; iDim<9; iDim++){
+      Sensitivity[iDim] = 0.0;
+    }
+  }else{
+    Sensitivity = new su2double[nDim];
+    for (iDim = 0; iDim < nDim; iDim++) {
+      Sensitivity[iDim] = 0.0;
+    }
   }
+
+
 
   for (iVar = 0; iVar < nVar; iVar++) {
     Solution[iVar] = val_solution[iVar];
