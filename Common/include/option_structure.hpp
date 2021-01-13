@@ -159,11 +159,13 @@ enum ANSWER {
  */
 enum AVERAGE_TYPE {
   AVERAGE_AREA = 1,     /*!< \brief Area-weighted average. */
-  AVERAGE_MASSFLUX = 2  /*!< \brief Mass-flux weighted average. */
+  AVERAGE_MASSFLUX = 2, /*!< \brief Mass-flux weighted average. */
+  AVERAGE_HYBRID = 3    /*!< \brief Hybrid weighted average for pyCycle coupling purposes. */
 };
 static const MapType<string, AVERAGE_TYPE> Average_Map = {
   MakePair("AREA", AVERAGE_AREA)
   MakePair("MASSFLUX", AVERAGE_MASSFLUX)
+  MakePair("HYBRID", AVERAGE_HYBRID)
 };
 
 /*!
@@ -1509,6 +1511,7 @@ enum ENUM_OBJECTIVE {
   SURFACE_SECOND_OVER_UNIFORM = 55, /*!< \brief Secondary over uniformity (relative secondary strength) objective function definition. */
   SURFACE_PRESSURE_DROP = 56,   /*!< \brief Pressure drop objective function definition. */
   CUSTOM_OBJFUNC = 31,          /*!< \brief Custom objective function definition. */
+  AVG_NORMAL_VEL = 32,          /*!< \brief Mass-averaged normal velocity. */
   TOTAL_PRESSURE_LOSS = 39,
   KINETIC_ENERGY_LOSS = 40,
   TOTAL_EFFICIENCY = 41,

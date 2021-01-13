@@ -656,6 +656,45 @@ vector<passivedouble> CDriver::GetVertexUnitNormal(unsigned short iMarker, unsig
 
 }
 
+vector<passivedouble> CDriver::GetStates(unsigned short iMarker){
+
+  CSolver *solver = solver_container[ZONE_0][INST_0][MESH_0][FLOW_SOL];
+  CGeometry *geometry = geometry_container[ZONE_0][INST_0][MESH_0];
+  unsigned long nVertex = geometry->GetnVertex(iMarker);
+  unsigned short iPoint;
+  vector<passivedouble> states(nVertex*7,0.0);
+  for (unsigned short iVertex=0; iVertex < nVertex; iVertex++){
+    iPoint = geometry->vertex[iMarker][iVertex]->GetNode();
+    
+    states[7*iVertex]    = SU2_TYPE::GetValue(solver->GetNodes()->GetDensity(iPoint));
+    states[7*iVertex+1]  = SU2_TYPE::GetValue(solver->GetNodes()->GetVelocity(iPoint,0));
+    states[7*iVertex+2]  = SU2_TYPE::GetValue(solver->GetNodes()->GetVelocity(iPoint,1));
+    states[7*iVertex+3]  = SU2_TYPE::GetValue(solver->GetNodes()->GetVelocity(iPoint,2));
+    states[7*iVertex+4]  = SU2_TYPE::GetValue(solver->GetNodes()->GetPressure(iPoint));
+    states[7*iVertex+5]  = SU2_TYPE::GetValue(solver->GetNodes()->GetSoundSpeed(iPoint));
+    states[7*iVertex+6]  = SU2_TYPE::GetValue(solver->GetNodes()->GetTemperature(iPoint));
+                                       
+  }
+  return states;
+}
+
+vector<passivedouble> CDriver::GetAIP(unsigned short iMarker){
+
+  vector<passivedouble> AIP(10,0.0);
+  AIP[0] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("AVG_TOTALPRESS"));
+  AIP[1] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("AVG_TOTALTEMP"));
+  AIP[2] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("AVG_ENTHALPY"));
+  AIP[3] = 0.0; //Get Total Entropy
+  AIP[4] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("AVG_PRESS"));
+  AIP[5] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("AVG_MASSFLOW"));
+  AIP[6] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("AVG_MACH"));
+  AIP[7] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("AVG_NORMALVEL"));
+  AIP[8] = SU2_TYPE::GetValue(config_container[ZONE_0]->GetRefArea());
+  AIP[9] = SU2_TYPE::GetValue(output_container[ZONE_0]->GetHistoryFieldValue("MOMENTUM_DISTORTION"));
+
+  return AIP;
+}
+
 vector<string> CDriver::GetAllBoundaryMarkersTag(){
 
   vector<string> boundariesTagList;
