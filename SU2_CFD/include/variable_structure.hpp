@@ -1651,7 +1651,7 @@ public:
    * \param[in] val_value - Value to add to the gradient of the primitive variables.
    */
   virtual void AddGradient_Primitive(unsigned short val_var, unsigned short val_dim, su2double val_value);
-  virtual void AddGradient_Blockage(unsigned short val_dim, su2double val_value);
+  //virtual void AddGradient_Blockage(unsigned short val_dim, su2double val_value);
   
   /*!
    * \brief A virtual member.
@@ -1660,7 +1660,7 @@ public:
    * \param[in] val_value - Value to subtract to the gradient of the primitive variables.
    */
   virtual void SubtractGradient_Primitive(unsigned short val_var, unsigned short val_dim, su2double val_value);
-  virtual void SubtractGradient_Blockage(unsigned short val_dim, su2double val_value);
+  //virtual void SubtractGradient_Blockage(unsigned short val_dim, su2double val_value);
   /*!
    * \brief A virtual member.
    * \param[in] val_var - Index of the variable.
@@ -1684,6 +1684,8 @@ public:
    */
   virtual void SetGradient_Primitive(unsigned short val_var, unsigned short val_dim, su2double val_value);
   virtual void SetGradient_Blockage(unsigned short val_dim, su2double val_value);
+  virtual void AddGradient_Blockage(unsigned short val_dim, su2double val_value);
+  virtual void SubtractGradient_Blockage(unsigned short val_dim, su2double val_value);
   /*!
    * \brief A virtual member.
    * \param[in] val_var - Index of the variable.

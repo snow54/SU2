@@ -475,11 +475,7 @@ inline void CVariable::SetGradient_BlockageZero(void) { }
 
 inline void CVariable::AddGradient_Primitive(unsigned short val_var, unsigned short val_dim, su2double val_value) { }
 
-inline void CVariable::AddGradient_Blockage(unsigned short val_dim, su2double val_value) { }
-
 inline void CVariable::SubtractGradient_Primitive(unsigned short val_var, unsigned short val_dim, su2double val_value) { }
-
-inline void CVariable::SubtractGradient_Blockage(unsigned short val_dim, su2double val_value) { }
 
 inline su2double CVariable::GetGradient_Primitive(unsigned short val_var, unsigned short val_dim) { return 0; }
 
@@ -490,7 +486,8 @@ inline su2double CVariable::GetLimiter_Primitive(unsigned short val_var) { retur
 inline void CVariable::SetGradient_Primitive(unsigned short val_var, unsigned short val_dim, su2double val_value) { }
 
 inline void CVariable::SetGradient_Blockage(unsigned short val_dim, su2double val_value) { }
-
+inline void CVariable::AddGradient_Blockage(unsigned short val_dim, su2double val_value) { }
+inline void CVariable::SubtractGradient_Blockage(unsigned short val_dim, su2double val_value) { }
 inline void CVariable::SetLimiter_Primitive(unsigned short val_var, su2double val_value) { }
 
 inline su2double **CVariable::GetGradient_Primitive(void) { return NULL; }

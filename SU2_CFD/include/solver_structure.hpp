@@ -1587,6 +1587,7 @@ public:
    */
   virtual void SetTotal_CD(su2double val_Total_CD);
   
+  void SetTotal_Flow_Angle(su2double val_Total_Flow_Angle);
   /*!
    * \brief A virtual member.
    * \param[in] val_Total_CL - Value of the total lift coefficient.
@@ -2363,6 +2364,7 @@ public:
    */
   virtual su2double GetTotal_CD(void);
   
+  virtual su2double GetTotal_Flow_Angle(void);
   /*!
    * \brief A virtual member.
    * \return Value of the drag coefficient (inviscid + viscous contribution).
@@ -4669,6 +4671,7 @@ protected:
   Total_CL_Prev,    /*!< \brief Total lift coefficient for all the boundaries (fixed lift mode). */
   Total_SolidCD, /*!< \brief Total drag coefficient for all the boundaries. */
   Total_CD_Prev, /*!< \brief Total drag coefficient for all the boundaries (fixed lift mode). */
+  Total_Flow_Angle, /*!< \brief Total absolute flow angle for all the boundaries. */
   Total_NetThrust, /*!< \brief Total drag coefficient for all the boundaries. */
   Total_Power, /*!< \brief Total drag coefficient for all the boundaries. */
   Total_ReverseFlow, /*!< \brief Total drag coefficient for all the boundaries. */
@@ -5860,6 +5863,7 @@ public:
    */
   su2double GetTotal_CD(void);
   
+  virtual su2double GetTotal_Flow_Angle(void);
   /*!
    * \brief Provide the total (inviscid + viscous) non dimensional drag coefficient.
    * \return Value of the drag coefficient (inviscid + viscous contribution).
@@ -6063,6 +6067,8 @@ public:
    * \param[in] val_Total_CL - Value of the total lift coefficient.
    */
   void SetTotal_CL(su2double val_Total_CL);
+
+  void SetTotal_Flow_Angle(su2double val_Total_Flow_Angle);
 
   /*!
    * \brief Store the total (inviscid + viscous) non dimensional drag coefficient.
@@ -8014,6 +8020,7 @@ public:
    */
   void SetTotal_CD(su2double val_Total_CDrag);
   
+  void SetTotal_Flow_Angle(su2double val_Total_Flow_Angle);
   /*!
    * \brief Get the inviscid contribution to the lift coefficient.
    * \return Value of the lift coefficient (inviscid contribution).
@@ -14425,6 +14432,7 @@ public:
    */
   void SetTotal_CD(su2double val_Total_CD);
 
+  void SetTotal_Flow_Angle(su2double val_Total_Flow_Angle);
   /*!
    * \brief Get the inviscid contribution to the lift coefficient.
    * \return Value of the lift coefficient (inviscid contribution).
@@ -15855,12 +15863,17 @@ class CBodyForceModelSolver : public CSolver {
   void AllocateMemory(CGeometry *geometry);
   su2double vector_dot_product(vector<su2double> v_1, vector<su2double> v_2);
   
+  bool RC_inclusion(su2double axial, su2double radial, vector<vector<su2double>>x_side);
+
+  su2double DW_average(vector<vector<su2double>>x_side, vector<su2double> y_side, su2double ax, su2double rad);
+  
   void ComputeCylProjections(CGeometry *geometry, CConfig *config, CSolver *solver);
 
   void ComputeRelVelocity(CGeometry *geometry, CConfig *config, CSolver *solver);
 
   void SetBFM_Formulation(unsigned short BFM_Formulation){kind_bfm = BFM_Formulation;};
   
+  su2double Bilinear_Interp(vector<vector<su2double>>x_side, vector<su2double> y_side, su2double ax, su2double rad);
   public:
 
   CBodyForceModelSolver(void);
@@ -15889,5 +15902,6 @@ class CBodyForceModelSolver : public CSolver {
   void BFM_Hall(CConfig *config, CGeometry *geometry, CSolver *fluidsolver);
 
   void ComputeBFMSources(CConfig *config, CGeometry *geometry, CSolver *fluidsolver);
+
   };
 #include "solver_structure.inl"

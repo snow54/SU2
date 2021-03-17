@@ -340,6 +340,8 @@ inline su2double CSolver::GetTotal_CL() { return 0; }
 
 inline su2double CSolver::GetTotal_CD() { return 0; }
 
+inline su2double CSolver::GetTotal_Flow_Angle() { return 0; }
+
 inline su2double CSolver::GetTotal_NetThrust() { return 0; }
 
 inline su2double CSolver::GetTotal_Power() { return 0; }
@@ -471,6 +473,8 @@ inline su2double CSolver::GetTotal_CHeat() { return 0; }
 inline void CSolver::SetTotal_CL(su2double val_Total_CL) { }
 
 inline void CSolver::SetTotal_CD(su2double val_Total_CD) { }
+
+inline void CSolver::SetTotal_Flow_Angle(su2double val_Total_Flow_Angle) { };
 
 inline void CSolver::SetTotal_NetThrust(su2double val_Total_NetThrust) { }
 
@@ -1361,6 +1365,8 @@ inline su2double CEulerSolver::GetTotal_ComboObj() { return Total_ComboObj; }
 
 inline su2double CEulerSolver::GetTotal_CD() { return Total_CD; }
 
+inline su2double CEulerSolver::GetTotal_Flow_Angle() { return Total_Flow_Angle; }
+
 inline su2double CEulerSolver::GetTotal_NetThrust() { return Total_NetThrust; }
 
 inline su2double CEulerSolver::GetTotal_Power() { return Total_Power; }
@@ -1454,6 +1460,8 @@ inline void CEulerSolver::SetTotal_CNearFieldOF(su2double cnearfieldpress) { Tot
 inline void CEulerSolver::SetTotal_CL(su2double val_Total_CL) { Total_CL = val_Total_CL; }
 
 inline void CEulerSolver::SetTotal_CD(su2double val_Total_CD) { Total_CD = val_Total_CD; }
+
+inline void CEulerSolver::SetTotal_Flow_Angle(su2double val_Total_Flow_Angle) {Total_Flow_Angle = val_Total_Flow_Angle; }
 
 inline void CEulerSolver::SetTotal_NetThrust(su2double val_Total_NetThrust) { Total_NetThrust = val_Total_NetThrust; }
 

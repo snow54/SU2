@@ -4920,7 +4920,7 @@ void CEulerSolver::Source_Residual(CGeometry *geometry, CSolver **solver_contain
   
   for (iVar = 0; iVar < nVar; iVar++) Residual[iVar] = 0.0;
   
-  //if (body_force && !adjoint) {
+  
   if (body_force) {
       /*--- Loop over all points ---*/
     for (iPoint = 0; iPoint < nPointDomain; iPoint++) {
@@ -5786,6 +5786,7 @@ void CEulerSolver::Pressure_Forces(CGeometry *geometry, CConfig *config) {
   
 }
 
+
 void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
   
   unsigned long iVertex, iPoint;
@@ -5796,7 +5797,8 @@ void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
   string Marker_Tag, Monitoring_Tag;
   su2double MomentX_Force[3] = {0.0,0.0,0.0}, MomentY_Force[3] = {0.0,0.0,0.0}, MomentZ_Force[3] = {0.0,0.0,0.0};
   su2double AxiFactor;
-  
+  su2double FlowMomentum[3] = {0, 0, 0}, axial_direction[3] = {0, 0, 1};
+
 #ifdef HAVE_MPI
   su2double MyAllBound_CD_Mnt, MyAllBound_CL_Mnt, MyAllBound_CSF_Mnt,
   MyAllBound_CMx_Mnt, MyAllBound_CMy_Mnt, MyAllBound_CMz_Mnt,
@@ -5815,12 +5817,16 @@ void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
   su2double RefLength  = config->GetRefLength();
   su2double Gas_Constant     = config->GetGas_ConstantND();
   su2double *Origin = NULL;
+  su2double tang_flow_angle, tang_flow_angle_local;
+  su2double flow_mom_axial_local, flow_mom_axial;
+  
   if (config->GetnMarker_Monitoring() != 0){
     Origin = config->GetRefOriginMoment(0);
   }
   bool grid_movement         = config->GetGrid_Movement();
   bool axisymmetric          = config->GetAxisymmetric();
-  
+  bool body_force            = config->GetBody_Force();
+
   /*--- Evaluate reference values for non-dimensionalization.
    For dynamic meshes, use the motion Mach number as a reference value
    for computing the force coefficients. Otherwise, use the freestream values,
@@ -5894,7 +5900,8 @@ void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
       MomentX_Force[0] = 0.0;  MomentX_Force[1] = 0.0;  MomentX_Force[2] = 0.0;
       MomentY_Force[0] = 0.0;  MomentY_Force[1] = 0.0;  MomentY_Force[2] = 0.0;
       MomentZ_Force[0] = 0.0;  MomentZ_Force[1] = 0.0;  MomentZ_Force[2] = 0.0;
-      
+      flow_mom_axial = 0.0;
+      tang_flow_angle = 0.0;
       /*--- Loop over the vertices to compute the forces ---*/
       
       for (iVertex = 0; iVertex < geometry->GetnVertex(iMarker); iVertex++) {
@@ -5909,6 +5916,7 @@ void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
           Normal = geometry->vertex[iMarker][iVertex]->GetNormal();
           Coord = geometry->node[iPoint]->GetCoord();
           Density   = node[iPoint]->GetDensity();
+          su2double radius = sqrt(Coord[0]*Coord[0] + Coord[1]*Coord[1]);
           
           /*--- Quadratic objective function for the near-field.
            This uses the infinity pressure regardless of Mach number. ---*/
@@ -5916,11 +5924,18 @@ void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
           Area = 0.0; for (iDim = 0; iDim < nDim; iDim++) Area += Normal[iDim]*Normal[iDim]; Area = sqrt(Area);
           
           MassFlow = 0.0;
+          flow_mom_axial_local = 0.0;
           for (iDim = 0; iDim < nDim; iDim++) {
             Velocity[iDim]  = node[iPoint]->GetVelocity(iDim);
             MomentDist[iDim] = Coord[iDim] - Origin[iDim];
             MassFlow -= Normal[iDim]*Velocity[iDim]*Density;
+            FlowMomentum[iDim] = Density * Velocity[iDim];
+            flow_mom_axial_local += FlowMomentum[iDim] * axial_direction[iDim];
           }
+          tang_flow_angle_local = flow_mom_axial_local * atan(((Coord[0]*FlowMomentum[1] - Coord[1]*FlowMomentum[0])/radius)/flow_mom_axial_local);
+          
+          tang_flow_angle += tang_flow_angle_local * Area;
+          flow_mom_axial += flow_mom_axial_local * Area;
           
           /*--- Axisymmetric simulations ---*/
           
@@ -6005,6 +6020,9 @@ void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
         AllBound_CQ_Mnt           += CQ_Mnt[iMarker];
         AllBound_CMerit_Mnt       += AllBound_CT_Mnt / (AllBound_CQ_Mnt + EPS);
         
+        Total_Flow_Angle = tang_flow_angle / flow_mom_axial;
+
+        
         /*--- Compute the coefficients per surface ---*/
         
         for (iMarker_Monitoring = 0; iMarker_Monitoring < config->GetnMarker_Monitoring(); iMarker_Monitoring++) {
@@ -6021,6 +6039,8 @@ void CEulerSolver::Momentum_Forces(CGeometry *geometry, CConfig *config) {
             Surface_CMx_Mnt[iMarker_Monitoring]     += CMx_Mnt[iMarker];
             Surface_CMy_Mnt[iMarker_Monitoring]     += CMy_Mnt[iMarker];
             Surface_CMz_Mnt[iMarker_Monitoring]     += CMz_Mnt[iMarker];
+            
+            
           }
         }
         
@@ -15736,162 +15756,7 @@ void CNSSolver::Preprocessing(CGeometry *geometry, CSolver **solver_container, C
                                config->GetKind_Upwind_Flow() == SLAU2);
   bool wall_functions       = config->GetWall_Functions();
   bool restart = (config->GetRestart() || config->GetRestart_Flow());
-  /*
-  bool body_force = config->GetBody_Force;
   
-  if ((ExtIter == 0) && (!restart) && body_force) {
-	  cout << "Performing Body Force Model blockage and camber normal interpolation " << endl;
-	  for (iMesh = 0; iMesh <= config->GetnMGLevels(); iMesh++){
-			unsigned short nDim = geometry[iMesh]->GetnDim();
-			su2double BF_radius = config->GetBody_Force_Radius();
-			int n_blade{0};
-			int n_points{0};
-			int n_rows{0};
-			ifstream inputFile;
-			inputFile.open("/home/evert/Documents/TU_Delft_administratie/Thesis/Pythonscripts/BFM_stage_input");
-			string line;
-			inputFile >> n_rows >> n_blade >> n_points;
-			
-			su2double xarray[n_rows][n_blade][n_points];
-			su2double rarray[n_rows][n_blade][n_points];
-			su2double Nxarray[n_rows][n_blade][n_points];
-			su2double Ntarray[n_rows][n_blade][n_points];
-			su2double Nrarray[n_rows][n_blade][n_points];
-			su2double barray[n_rows][n_blade][n_points];
-			su2double dbdxarray[n_rows][n_blade][n_points];
-			su2double dbdrarray[n_rows][n_blade][n_points];
-			su2double D_LE[n_rows][n_blade][n_points];
-			su2double blade_count[n_rows];
-			su2double rotation[n_rows];
-			int start_line{};
-			int end_line{};
-			su2double x_min = 0.0;
-			for (int q=0; q < n_rows; q++){
-				for (int p=0; p < n_blade; p++){
-					getline(inputFile, line);
-					start_line = p * n_points + 1;
-					end_line = (p + 1) * n_points;
-					int j=0;
-					for (int i=start_line; i<=end_line; i++){
-						getline(inputFile, line);
-						if (i >= start_line){
-							inputFile >> xarray[q][p][j] >> rarray[q][p][j] >> Nxarray[q][p][j] >> Ntarray[q][p][j] >> Nrarray[q][p][j] >> barray[q][p][j] >> dbdxarray[q][p][j] >> dbdrarray[q][p][j] >> rotation[q] >> blade_count[q];
-							//cout << xarray[j] << "	" << barray[j] << endl;
-							if(xarray[q][p][j] <= x_min){
-								x_min = xarray[q][p][j];
-							}
-							
-							j++;
-						}
-						
-					}
-					for (int i=0; i < n_points; i++){
-						D_LE[q][p][i] = xarray[q][p][i] - xarray[q][p][0];
-					}
-				}
-			}
-			inputFile.close();
-			
-			
-			x_min = x_min - 1.0;
-			for (iPoint = 0; iPoint < geometry[iMesh]->GetnPoint(); iPoint++){
-				su2double *Coord = geometry[iMesh]->node[iPoint]->GetCoord();
-				su2double x = Coord[0];
-				su2double y = Coord[1];
-				
-				su2double r{};
-				su2double b=1.0, dbdx = 0.0, dbdr = 0.0, Nx = 0.0, Nt = 1.0, Nr = 0.0, bfFac = 0.0, d_le = 0.0, rotFac = 0.0, bladeCount = 10;
-				su2double BodyForceParams[10] = {bfFac, b, dbdx, dbdr, Nx, Nt, Nr, d_le, rotFac, bladeCount};
-				if (nDim == 3){
-					su2double z = Coord[2];
-					r = sqrt(y*y + z*z);
-				}else{
-					r = BF_radius;
-				}
-				for (int q=0; q < n_rows; q++){
-					for(int j=0; j < n_blade - 1; j++){
-						for(int n = 0; n < n_points - 1; n++){
-							su2double x_side[5] = {xarray[q][j][n], xarray[q][j+1][n], xarray[q][j+1][n+1], xarray[q][j][n+1], xarray[q][j][n]};
-							su2double r_side[5] = {rarray[q][j][n], rarray[q][j+1][n], rarray[q][j+1][n+1], rarray[q][j][n+1], rarray[q][j][n]};
-							su2double b_side[5] = {barray[q][j][n], barray[q][j+1][n], barray[q][j+1][n+1], barray[q][j][n+1], barray[q][j][n]};
-							su2double dbdx_side[5] = {dbdxarray[q][j][n], dbdxarray[q][j+1][n], dbdxarray[q][j+1][n+1], dbdxarray[q][j][n+1], dbdxarray[q][j][n]};
-							su2double dbdr_side[5] = {dbdrarray[q][j][n], dbdrarray[q][j+1][n], dbdrarray[q][j+1][n+1], dbdrarray[q][j][n+1], dbdrarray[q][j][n]};
-							su2double Nx_side[5] = {Nxarray[q][j][n], Nxarray[q][j+1][n], Nxarray[q][j+1][n+1], Nxarray[q][j][n+1], Nxarray[q][j][n]};
-							su2double Nt_side[5] = {Ntarray[q][j][n], Ntarray[q][j+1][n], Ntarray[q][j+1][n+1], Ntarray[q][j][n+1], Ntarray[q][j][n]};
-							su2double Nr_side[5] = {Nrarray[q][j][n], Nrarray[q][j+1][n], Nrarray[q][j+1][n+1], Nrarray[q][j][n+1], Nrarray[q][j][n]};
-							su2double d_le_side[5] = {D_LE[q][j][n], D_LE[q][j+1][n], D_LE[q][j+1][n+1], D_LE[q][j][n+1], D_LE[q][j][n]};
-							
-							su2double x1{}, x2{}, r1{}, r2{};
-							int nInt=0;
-							bool inside = false;
-							for(int p=0; p < 4; p++){
-								x1 = x_side[p];
-								x2 = x_side[p + 1];
-								r1 = r_side[p];
-								r2 = r_side[p + 1];
-								
-								su2double A[2][2] = {{x - x_min, - (x2 - x1)}, {0, -(r2 - r1)}};
-								su2double det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
-								su2double S_ray{}, S_side{};
-								
-								if(det != 0){
-									S_ray = (1 / det) * ((x1 - x_min) * A[1][1] + (r1 - r) * -A[0][1]);
-									S_side = (1 / det) * (x1 * -A[1][0] + (r1 - r) * A[0][0]);
-									if(S_ray >= 0.0 && S_ray < 1.0 && S_side >= 0.0 && S_side < 1.0){
-										nInt ++;
-									}
-								}
-							}
-							if (nInt % 2 != 0 and nInt > 0){
-								inside = true;
-							}
-							if (inside){
-								su2double dist{}, deNom=0;
-								su2double eNum_b{}, eNum_dbdx{}, eNum_dbdr{}, eNum_Nx{}, eNum_Nt{}, eNum_Nr{}, eNum_d_le{};
-								for(int p = 0; p < 4; p++){
-									dist = sqrt((x - x_side[p]) * (x - x_side[p]) + (r - r_side[p]) * (r - r_side[p]));
-									deNom += 1 / dist;
-									eNum_b += b_side[p] / dist;
-									eNum_dbdx += dbdx_side[p] / dist;
-									eNum_dbdr += dbdr_side[p] / dist;
-									eNum_Nx += Nx_side[p] / dist;
-									eNum_Nt += Nt_side[p] / dist;
-									eNum_Nr += Nr_side[p] / dist;
-									eNum_d_le += d_le_side[p] / dist;
-								}
-								bfFac = 1.0;
-								b = eNum_b / deNom;
-								dbdx = eNum_dbdx / deNom;
-								dbdr = eNum_dbdr / deNom;
-								Nx = eNum_Nx / deNom;
-								Nt = eNum_Nt / deNom;
-								Nr = eNum_Nr / deNom;
-								d_le = eNum_d_le / deNom;
-								rotFac = rotation[q];
-								bladeCount = blade_count[q];
-								
-							}
-							BodyForceParams[0] = bfFac;
-							BodyForceParams[1] = b;
-							BodyForceParams[2] = dbdx;
-							BodyForceParams[3] = dbdr;
-							BodyForceParams[4] = Nx;
-							BodyForceParams[5] = Nt;
-							BodyForceParams[6] = Nr;
-							BodyForceParams[7] = d_le;
-							BodyForceParams[8] = rotFac;
-							BodyForceParams[9] = bladeCount;
-						}
-					}
-				}
-				//cout << "X: " << x << " bFac: " << BodyForceParams[0] <<" rotFac: " << BodyForceParams[8] << " d_le: " << BodyForceParams[7] << endl;
-				node[iPoint]->SetBodyForceParameters(BodyForceParams);
-				
-			}
-		  }
-	  
-  }
-  */
   /*--- Update the angle of attack at the far-field for fixed CL calculations (only direct problem). ---*/
   
   if ((fixed_cl) && (!disc_adjoint) && (!cont_adjoint)) { SetFarfield_AoA(geometry, solver_container, config, iMesh, Output); }
@@ -16305,17 +16170,7 @@ void CNSSolver::Viscous_Residual(CGeometry *geometry, CSolver **solver_container
     }
     
   }
-  // if(body_force){
-  //   su2double Residual_BFM [nDim+2];
-  //   for(iPoint=0; iPoint<nPointDomain; iPoint++){
-      
-  //     for (int iVar = 0; iVar < nDim + 2; iVar++) Residual_BFM[iVar] = 0.0;
-  //     numerics->ComputeResidual(Residual_BFM, config, node[iPoint]->GetBody_Force_Source(), node[iPoint]->GetBlockage_Source());
-	  
-  //     /*--- Add the source residual to the total ---*/
-  //     LinSysRes.AddBlock(iPoint, Residual_BFM);
-  //   }
-  // }
+  
   
 }
 

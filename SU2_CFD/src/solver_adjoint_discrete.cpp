@@ -175,15 +175,6 @@ void CDiscAdjSolver::SetRecording(CGeometry* geometry, CConfig *config){
   for (iPoint = 0; iPoint < nPoint; iPoint++) {
     direct_solver->node[iPoint]->SetSolution(node[iPoint]->GetSolution_Direct());
   }
-  // if(body_force){
-  //     cout<<"Set Recoding Test"<<endl;
-  //     su2double *BFMParameters_adj = node[iPoint]->GetBodyForceParameters();
-  //     su2double *BFMParameters_direct = direct_solver->node[iPoint]->GetBodyForceParameters();
-  //     cout << BFMParameters_adj[0] << endl;
-  //     cout << BFMParameters_direct[0] << endl;
-  //     direct_solver->node[iPoint]->SetBodyForceParameters(node[iPoint]->GetBodyForceParameters());
-  //     direct_solver->node[iPoint]->SetBody_Force_Source(node[iPoint]->GetBody_Force_Source());
-  // }
 
   if (time_n_needed) {
     for (iPoint = 0; iPoint < nPoint; iPoint++) {
@@ -451,7 +442,9 @@ void CDiscAdjSolver::RegisterObj_Func(CConfig *config) {
       ObjFunc_Value = direct_solver->GetTotal_Buffet_Metric();
       break;
     }
-
+    if(config->GetBody_Force()){
+      ObjFunc_Value = direct_solver->GetTotal_Flow_Angle();
+    }
     /*--- Template for new objective functions where TemplateObjFunction()
      *  is the routine that returns the obj. function value. The computation
      * must be done while the tape is active, i.e. between AD::StartRecording() and

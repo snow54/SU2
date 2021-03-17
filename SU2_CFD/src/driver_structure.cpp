@@ -1387,6 +1387,7 @@ void CDriver::Solver_Preprocessing(CSolver ****solver_container, CGeometry ***ge
     //BFM:
     
     if (body_force){
+      // Defining Body-Force Model and perform all the required preprocessing.
       solver_container[val_iInst][iMGlevel][BFM_SOL] = new CBodyForceModelSolver(geometry[val_iInst][iMGlevel], config, solver_container[val_iInst][iMGlevel][FLOW_SOL], iMGlevel);
       solver_container[val_iInst][iMGlevel][BFM_SOL]->PreprocessBFMParams(geometry[val_iInst][iMGlevel], config, solver_container[val_iInst][iMGlevel][FLOW_SOL]);
     }
@@ -1635,11 +1636,6 @@ void CDriver::Solver_Restart(CSolver ****solver_container, CGeometry ***geometry
     if (heat_fvm) {
       solver_container[val_iInst][MESH_0][HEAT_SOL]->LoadRestart(geometry[val_iInst], solver_container[val_iInst], config, val_iter, update_geo);
     }
-    // //BFM:
-    
-    // if (body_force){
-    //   solver_container[val_iInst][MESH_0][BFM_SOL]->LoadRestart(geometry[val_iInst], solver_container[val_iInst], config, val_iter, update_geo);
-    // }
     
     
   }
@@ -4586,7 +4582,8 @@ void CDiscAdjFluidDriver::Run() {
     SetRecording(NONE);
 
 //    /*--- Store the computational graph of one direct iteration with the mesh coordinates as input. ---*/
-//	cout << "Setting body-forces as input..." << endl;
+  // In case of a BFM simulation, the body-force parameters are stored as input. Otherwise, the mesh coordinates
+  // TODO: allow for both mesh coordinates and BFM parameters for BFM adjoint solving.
 	if(!body_force){
 		SetRecording(MESH_COORDS);
 	}else{

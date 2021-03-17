@@ -624,8 +624,6 @@ void CFluidIteration::Iterate(COutput *output,
 	  
     for(unsigned short iMesh=0; iMesh<=config_container[val_iZone]->GetnMGLevels(); iMesh++){
       solver_container[val_iZone][iMesh][val_iInst][BFM_SOL]->ComputeBFMSources(config_container[val_iZone], geometry_container[val_iZone][val_iInst][iMesh], solver_container[val_iZone][iMesh][INST_0][FLOW_SOL]);
-      //solver_container[val_iZone][iMesh][val_iInst][BFM_SOL]->ComputeBodyForce_Source(config_container[val_iZone], geometry_container[val_iZone][val_iInst][MESH_0], solver_container[val_iZone][MESH_0][INST_0][FLOW_SOL]);
-      //solver_container[val_iZone][iMesh][val_iInst][BFM_SOL]->ComputeBlockage_Source(config_container[val_iZone], geometry_container[val_iZone][val_iInst][MESH_0], solver_container[val_iZone][MESH_0][INST_0][FLOW_SOL]);
     }
   }
 
@@ -1902,12 +1900,6 @@ void CAdjFluidIteration::Preprocess(COutput *output,
     if (config_container[val_iZone]->GetKind_Solver() == ADJ_RANS)
       config_container[val_iZone]->SetGlobalParam(ADJ_RANS, RUNTIME_FLOW_SYS, ExtIter);
     
-    /*--- Solve the Euler, Navier-Stokes or Reynolds-averaged Navier-Stokes (RANS) equations (one iteration) ---*/
-    // if (body_force) {
-    //   solver_container[val_iZone][INST_0][MESH_0][BFM_SOL]->PreprocessBFMParams(geometry_container[val_iZone][INST_0][MESH_0], config_container[val_iZone], solver_container[val_iZone][INST_0][MESH_0][FLOW_SOL]);
-	  //   SU2_MPI::Barrier(MPI_COMM_WORLD);
-		//   solver_container[val_iZone][INST_0][MESH_0][BFM_SOL]->ComputeBFMSources(config_container[val_iZone], geometry_container[val_iZone][INST_0][MESH_0], solver_container[val_iZone][INST_0][MESH_0][FLOW_SOL]);
-    // }
     if (rank == MASTER_NODE && val_iZone == ZONE_0)
       cout << "Begin direct solver to store flow data (single iteration)." << endl;
     

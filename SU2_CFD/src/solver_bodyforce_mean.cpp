@@ -258,7 +258,7 @@ void CBodyForceModelSolver::BFM_Hall(CConfig *config, CGeometry *geometry, CSolv
 		
 		// Appending Cartesial body-forces to body-force vector
 		for(int iDim=0; iDim<nDim; iDim++){
-			F[iDim] = U_i[0] * (F_ax*proj_vector_axial[iDim][iPoint] + F_th*proj_vector_tangential[iDim][iPoint] + F_r*proj_vector_radial[iDim][iPoint]);
+			F[iDim] = U_i[0] * (F_ax*proj_vector_axial[iPoint][iDim] + F_th*proj_vector_tangential[iPoint][iDim] + F_r*proj_vector_radial[iPoint][iDim]);
 		}
 
 		// Appending source term values to the body-force source term vector
@@ -352,8 +352,9 @@ void CBodyForceModelSolver::BFM_Thollet(CConfig *config, CGeometry *geometry, CS
 		if(Re_x == 0.0){
 			Re_x = (0.001 * W_mag * U_i[0]) / mu;
 		}
+		// Parallel force friction factor.
 		C_f = 0.0592 * pow(Re_x, -0.2) ;
-	
+
 		// Calculating the normal force compressibility factor
 		if (M_rel < 1) {
 			Kprime = 1 / (sqrt(1 - (M_rel * M_rel)));
@@ -524,6 +525,9 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
   	unsigned short iMesh, iDim;
   	unsigned short iZone = config->GetiZone();
 	su2double BF_radius = config->GetBody_Force_Radius();	
+	bool RC_interp = true;
+	bool S_projection = false;
+
 	// Subtracting 1 meter from minimum axial coordinate to ensure it's located outside of the domain
 	x_min = x_min - 1.0;
 	
@@ -540,7 +544,8 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
 	su2double cell_axial_coordinate, cell_radial_coordinate;
 	su2double rot_dot_x, rot_dot_rot;
 	su2double axial[nDim], radial[nDim];
-	su2double x_side [4][2] {{0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}};
+	//su2double x_side [4][2] {{0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}};
+	vector <vector<su2double>> x_side {{0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}};
 	vector<su2double> blockage_side, Nx_side, Nt_side, Nr_side, x_le_side, chord_side;
 	vector<su2double> edge {0, 0}, v_x {0, 0}, v_opp {0, 0}, proj_x {0, 0}, proj_opp {0, 0};
 	su2double orientation;
@@ -595,49 +600,32 @@ void CBodyForceModelSolver::InterpolateGeometry(CGeometry *geometry, CConfig *co
 					x_le_side = {X_le_data[q][j][n], X_le_data[q][j+1][n], X_le_data[q][j+1][n+1], X_le_data[q][j][n+1]};
 					chord_side = {chord_data[q][j][n], chord_data[q][j+1][n], chord_data[q][j+1][n+1], chord_data[q][j][n+1]};
 
-					inside = true;	// point is inside of the blade region by default
-					// Looping over sides to check for inclusion
-					for(int p=0; p < 4; p++){
-						int p_next = (p+1) % 4; // Next corner index
-						int p_opp = (p+2) % 4; // Opposite corner index
-						
-						edge.at(0) = x_side[p_next][0] - x_side[p][0];
-						edge.at(1) = x_side[p_next][1] - x_side[p][1];
-						v_opp.at(0) = x_side[p_opp][0] - x_side[p][0];
-						v_opp.at(1) = x_side[p_opp][1] - x_side[p][1];
-						v_x.at(0) = cell_axial_coordinate - x_side[p][0];
-						v_x.at(1) = cell_radial_coordinate - x_side[p][1];
-						proj_opp.at(0) = v_opp.at(0) - (vector_dot_product(edge, v_opp)/vector_dot_product(edge, edge))*edge.at(0);
-						proj_opp.at(1) = v_opp.at(1) - (vector_dot_product(edge, v_opp)/vector_dot_product(edge, edge))*edge.at(1);
-						proj_x.at(0) = v_x.at(0) - (vector_dot_product(edge, v_x)/vector_dot_product(edge, edge))*edge.at(0);
-						proj_x.at(1) = v_x.at(1) - (vector_dot_product(edge, v_x)/vector_dot_product(edge, edge))*edge.at(1);
-						orientation = vector_dot_product(proj_opp, proj_x);
-						if(orientation < 0){
-							inside = false;
-						}
-					}
-					// If the point is inside, the body-force parameters are interpolated through distance-weighted average from the corner points
+					// Checking whether point is inside of the current input node.
+					inside = RC_inclusion(cell_axial_coordinate, cell_radial_coordinate, x_side);
+
+					// If the point is inside, the body-force parameters are interpolated through bilinear interpolation from the corner points.
 					if (inside){
-						dist = 0; deNom=0; eNum_b = 0; eNum_Nx = 0; eNum_Nt = 0; eNum_Nr = 0; eNum_x_le = 0; eNum_chord = 0;
-						for(int p = 0; p < 4; p++){
-							dist = sqrt((cell_axial_coordinate - x_side[p][0]) * (cell_axial_coordinate - x_side[p][0]) + (cell_radial_coordinate - x_side[p][1]) * (cell_radial_coordinate - x_side[p][1]));
-							deNom += 1 / dist;
-							eNum_b += blockage_side.at(p) / dist;
-							eNum_Nx += Nx_side.at(p) / dist;
-							eNum_Nt += Nt_side.at(p) / dist;
-							eNum_Nr += Nr_side.at(p) / dist;
-							eNum_x_le += x_le_side.at(p) / dist;
-							eNum_chord += chord_side.at(p) / dist;
-						}
+						
 						bfFac = 1.0;
-						b = eNum_b / deNom;
-						Nx = eNum_Nx / deNom;
-						Nt = eNum_Nt / deNom;
-						Nr = eNum_Nr / deNom;
-						x_le = eNum_x_le / deNom;
+						// b = DW_average(x_side, blockage_side, cell_axial_coordinate, cell_radial_coordinate);
+						// Nx = DW_average(x_side, Nx_side, cell_axial_coordinate, cell_radial_coordinate);
+						// Nt = DW_average(x_side, Nt_side, cell_axial_coordinate, cell_radial_coordinate);
+						// Nr = DW_average(x_side, Nr_side, cell_axial_coordinate, cell_radial_coordinate);
+						// x_le = DW_average(x_side, x_le_side, cell_axial_coordinate, cell_radial_coordinate);
+						// chord = DW_average(x_side, chord_side, cell_axial_coordinate, cell_radial_coordinate);
+						// rotFac = row_rotation[q];
+						// bladeCount = row_blade_count[q];
+
+						b = Bilinear_Interp(x_side, blockage_side, cell_axial_coordinate, cell_radial_coordinate);
+						Nx = Bilinear_Interp(x_side, Nx_side, cell_axial_coordinate, cell_radial_coordinate);
+						Nt = Bilinear_Interp(x_side, Nt_side, cell_axial_coordinate, cell_radial_coordinate);
+						Nr = Bilinear_Interp(x_side, Nr_side, cell_axial_coordinate, cell_radial_coordinate);
+						x_le = Bilinear_Interp(x_side, x_le_side, cell_axial_coordinate, cell_radial_coordinate);
+						chord = Bilinear_Interp(x_side, chord_side, cell_axial_coordinate, cell_radial_coordinate);
 						rotFac = row_rotation[q];
 						bladeCount = row_blade_count[q];
-						chord = eNum_chord / deNom;
+
+						// Setting loop variables to their maximum to exit the loop
 						q = n_rows;
 						j = n_sec;
 						n = n_axial;
@@ -804,6 +792,8 @@ void CBodyForceModelSolver::ComputeBlockageGradient(CGeometry *geometry, CConfig
 		AD::EndPreacc();
 		*/
 	}
+	
+
 }
 
 void CBodyForceModelSolver::ComputeBFMSources(CConfig *config, CGeometry *geometry, CSolver *fluidsolver){
@@ -845,7 +835,11 @@ void CBodyForceModelSolver::ComputeBlockage_Source(CConfig *config, CGeometry *g
 	// The function loops over all points in the zone, calculating and storing the residual blockage vector for each
 	// respective node.
 	su2double b = 1.0;
+	su2double bffac = 0.0;
 	su2double BGradient[nDim], Blockage_Div = 0.0;
+	su2double MomGradient[nDim];
+	su2double rho;
+	su2double Velocity[nDim];
 	for ( iPoint = 0; iPoint < geometry->GetnPoint(); iPoint++ ) {
 		// Getting the solution and primitive variables of the current node.
 		U_i = fluidsolver->node[iPoint]->GetSolution();
@@ -856,34 +850,39 @@ void CBodyForceModelSolver::ComputeBlockage_Source(CConfig *config, CGeometry *g
 		
 		// The blockage factor is extracted at the node, resulting from the interpolation during initialization.
 		Geometric_Parameters = fluidsolver->node[iPoint]->GetBodyForceParameters();
+		bffac = Geometric_Parameters[0];
 		b = Geometric_Parameters[1];
-		//b = 1.0;
+		
 		
 		// Obtaining blockage derivative from gradient field, calculated during initialization.
 		for(iDim=0; iDim < nDim; iDim++){
 			BGradient[iDim] = fluidsolver->node[iPoint]->GetGradient_Blockage(iDim);
-			//BGradient[iDim] = 0.0;
 		}
 		
+		// Fluid density
+		rho = U_i[0];
 		
+		// Initializing blockage divergence with zero.
 		Blockage_Div = 0.0;
 		// Calculating blockage divergence term.
 		for(iDim=0; iDim < nDim; iDim ++){
-			Blockage_Div += (U_i[iDim + 1] / U_i[0]) * BGradient[iDim];
+			Velocity[iDim] = U_i[iDim + 1]/rho;
+			Blockage_Div += rho * Velocity[iDim] * BGradient[iDim];
 		}
 		
 		// Inserting values into the blockage residual vector.
 		if(nDim == 2){
-		Blockage_Vector[0] = -(1 / b) * U_i[0] * Blockage_Div;
-		Blockage_Vector[1] = -(1 / b) * U_i[1] * Blockage_Div;
-		Blockage_Vector[2] = -(1 / b) * U_i[2] * Blockage_Div;
-		Blockage_Vector[3] = -(1 / b) * U_i[0] * enthalpy * Blockage_Div;
+			Blockage_Vector[0] = -(1 / b) * Blockage_Div;
+			Blockage_Vector[1] = -(1 / b) * Velocity[0] * Blockage_Div;
+			Blockage_Vector[2] = -(1 / b) * Velocity[1] * Blockage_Div;
+			Blockage_Vector[3] = -(1 / b) * enthalpy * Blockage_Div;
 		}else{
-		Blockage_Vector[0] = -(1 / b) * U_i[0] * Blockage_Div;
-		Blockage_Vector[1] = -(1 / b) * U_i[1] * Blockage_Div;
-		Blockage_Vector[2] = -(1 / b) * U_i[2] * Blockage_Div;
-		Blockage_Vector[3] = -(1 / b) * U_i[3] * Blockage_Div;
-		Blockage_Vector[4] = -(1 / b) * U_i[0] * enthalpy * Blockage_Div;
+
+			Blockage_Vector[0] = -bffac * (1 / b) * Blockage_Div;
+			Blockage_Vector[1] = -bffac * (1 / b) * Velocity[0] * Blockage_Div;
+			Blockage_Vector[2] = -bffac * (1 / b) * Velocity[1] * Blockage_Div;
+			Blockage_Vector[3] = -bffac * (1 / b) * Velocity[2] * Blockage_Div;
+			Blockage_Vector[4] = -bffac * (1 / b) * enthalpy * Blockage_Div;
 		}
 		
 		// Storing the blockage residual vector at the current node.
@@ -891,6 +890,78 @@ void CBodyForceModelSolver::ComputeBlockage_Source(CConfig *config, CGeometry *g
 	};
 }
 
+bool CBodyForceModelSolver::RC_inclusion(su2double axial, su2double radial, vector<vector<su2double>>x_side){
+
+	unsigned short n_int {0};
+	bool inside = false;
+	unsigned short n_nodes = x_side.size();
+	unsigned short i_next;
+	su2double ax_min {0};
+	su2double determinant, S, R;
+	for(unsigned short i=0; i<n_nodes; i++){
+		if(x_side[i][0] < ax_min) ax_min = x_side[1][0];
+	}
+	ax_min -= 1;
+	for(unsigned short i=0; i<n_nodes; i++){
+		i_next = (i+1) % n_nodes;
+		determinant = (axial - ax_min)*(x_side[i_next][1] - x_side[i][1]);
+		if(determinant != 0){
+			S = (1 / determinant) * (axial - ax_min)*(radial - x_side[i][1]);
+			R = (1 / determinant) * ((x_side[i][1] - x_side[i_next][1])*(ax_min - x_side[i][0]) + 
+			(x_side[i_next][0] - x_side[i][0])*(radial - x_side[i][1]));
+			if((S >= 0 && S <= 1) && (R >= 0 && R <= 1)){
+				n_int ++;
+			}
+		}
+	}
+	if(n_int % 2 != 0){
+		inside = true;
+	}
+	return inside;
+}
+su2double CBodyForceModelSolver::Bilinear_Interp(vector<vector<su2double>> x_side, vector<su2double> y_side, su2double axial, su2double radial){
+	// This function allows for bilinear interpolation over a given set of corner points stored in x_side, with values stored in y_side. 
+	// This is done through transforming the corner point coordinates to a unit square.
+
+	su2double m, l, interp_solution;
+
+	// Axial, unit distance
+	m = (axial - x_side.at(0).at(0))/(x_side.at(3).at(0) - x_side.at(0).at(0));
+
+	// Lower and upper radii
+	su2double r_low = x_side.at(0).at(1) + (x_side.at(3).at(1) - x_side.at(0).at(1))*(axial - x_side.at(0).at(0));
+	su2double r_high = x_side.at(1).at(1) + (x_side.at(2).at(1) - x_side.at(1).at(1))*(axial - x_side.at(0).at(0));
+
+	// Radial, unit distance
+	l = (radial - r_low)/(r_high - r_low);
+
+	// Interpolating solution based on unit coordinates
+	interp_solution = (1 - m)*(1 - l)*y_side.at(0) +(1 - m)*l*y_side.at(1) + m*(1 - l)*y_side.at(3) + m*l*y_side.at(2);
+	return interp_solution;
+}
+su2double CBodyForceModelSolver::DW_average(vector<vector<su2double>> x_side, vector<su2double> y_side, su2double axial, su2double radial){
+	su2double eNum{0};
+	su2double deNom{0};
+	su2double dist{0};
+	su2double y_interp;
+	bool intersect = false;
+	unsigned short n_nodes = y_side.size();
+	for(unsigned short i=0; i<n_nodes; i++){
+		dist = sqrt(pow(axial - x_side[i][0], 2) + pow(radial - x_side[i][1], 2));
+		if(dist == 0){
+			y_interp = y_side[i];
+			i = n_nodes;
+			intersect = true;
+		}else{
+			eNum += y_side[i]/dist;
+			deNom += 1 / dist;
+		}
+	}
+	if(!intersect){
+		y_interp = eNum / deNom;
+	}
+	return y_interp;
+}
 CBodyForceModelSolver::CBodyForceModelSolver::~CBodyForceModelSolver(){
 	for(unsigned long iPoint=0; iPoint<nPoint_geom; iPoint++){
 		delete [] proj_vector_axial[iPoint];
@@ -929,10 +1000,11 @@ CBodyForceModelSolver::CBodyForceModelSolver::~CBodyForceModelSolver(){
 	delete [] X_le_data;
 	delete [] row_rotation;
 	delete [] row_blade_count;
-	cout << "Deleted CBodyForceModel container" << endl;
+	cout << "Deleted CBodyForceModel container." << endl;
 }
 
 su2double CBodyForceModelSolver::vector_dot_product(vector<su2double> v_1, vector<su2double> v_2){
+
 	int n = v_1.size();
 	su2double dot_product {0};
 	for(int i=0; i<n; i++){
