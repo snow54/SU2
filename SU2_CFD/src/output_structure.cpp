@@ -9912,6 +9912,8 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
     
     /*--- Compute equivalent area distribution at each azimuth angle ---*/
     
+    string nearVar;
+    nearVar=config->GetNearfieldVariable();
     for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
       EquivArea_PhiAngle[iPhiAngle][0] = 0.0;
       for (iVertex = 1; iVertex < EquivArea_PhiAngle[iPhiAngle].size(); iVertex++) {
@@ -9920,16 +9922,21 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
         Coord_i = Xcoord_PhiAngle[iPhiAngle][iVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][iVertex]*sin(AoA);
         
         for (jVertex = 0; jVertex < iVertex-1; jVertex++) {
-          
-          Coord_j = Xcoord_PhiAngle[iPhiAngle][jVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex]*sin(AoA);
-          jp1Coord = Xcoord_PhiAngle[iPhiAngle][jVertex+1]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex+1]*sin(AoA);
-          
-          jFunction = factor*(Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf)*sqrt(Coord_i-Coord_j);
-          jp1Function = factor*(Pressure_PhiAngle[iPhiAngle][jVertex+1] - Pressure_Inf)*sqrt(Coord_i-jp1Coord);
-          
-          DeltaX = (jp1Coord-Coord_j);
-          MeanFuntion = 0.5*(jp1Function + jFunction);
-          EquivArea_PhiAngle[iPhiAngle][iVertex] += DeltaX * MeanFuntion;
+          if (strcmp(nearVar.c_str(),"EA")==0){
+            Coord_j = Xcoord_PhiAngle[iPhiAngle][jVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex]*sin(AoA);
+            jp1Coord = Xcoord_PhiAngle[iPhiAngle][jVertex+1]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex+1]*sin(AoA);
+            
+            jFunction = factor*(Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf)*sqrt(Coord_i-Coord_j);
+            jp1Function = factor*(Pressure_PhiAngle[iPhiAngle][jVertex+1] - Pressure_Inf)*sqrt(Coord_i-jp1Coord);
+            
+            DeltaX = (jp1Coord-Coord_j);
+            MeanFuntion = 0.5*(jp1Function + jFunction);
+            EquivArea_PhiAngle[iPhiAngle][iVertex] += DeltaX * MeanFuntion;
+          }
+          else if(strcmp(nearVar.c_str(),"CP")==0){
+            EquivArea_PhiAngle[iPhiAngle][iVertex]=Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf;
+          } 
+            
         }
       }
     }
@@ -10037,7 +10044,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
     /*--- Evaluate the objective function ---*/
     
     su2double AzimuthalWeightCutoffangle = config->GetAzimuthalWeightCutoffangle();
-    su2double AzimuthalWeightFrac = config->AzimuthalWeightFrac();
+    su2double AzimuthalWeightFrac = config->GetAzimuthalWeightFrac();
 
     InverseDesign = 0;
     for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)

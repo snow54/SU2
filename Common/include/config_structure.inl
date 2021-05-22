@@ -1610,6 +1610,8 @@ inline su2double CConfig::GetAzimuthalWeightCutoffangle(void) { return Azimuthal
 
 inline su2double CConfig::GetAzimuthalWeightFrac(void) { return AzimuthalWeightFrac; }
 
+inline string CConfig::GetNearfieldVariable(void) { return NearfieldVariable; }
+
 inline su2double CConfig::GetCFLRedCoeff_Turb(void) { return CFLRedCoeff_Turb; }
 
 inline bool CConfig::GetGrid_Movement(void) { return Grid_Movement; }

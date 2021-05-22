@@ -166,6 +166,9 @@ private:
   unsigned short Dynamic_Analysis;	/*!< \brief Static or dynamic structural analysis. */
   unsigned short nStartUpIter;	/*!< \brief Start up iterations using the fine grid. */
   su2double FixAzimuthalLine; /*!< \brief Fix an azimuthal line due to misalignments of the nearfield. */
+  su2double AzimuthalWeightCutoffangle;
+  su2double AzimuthalWeightFrac;
+  string NearfieldVariable;
   su2double **DV_Value;		/*!< \brief Previous value of the design variable. */
   su2double Venkat_LimiterCoeff;				/*!< \brief Limiter coefficient */
   unsigned long LimiterIter;	/*!< \brief Freeze the value of the limiter after a number of iterations */
@@ -6314,6 +6317,8 @@ public:
    */
   su2double GetAzimuthalWeightFrac(void);
   
+string GetNearfieldVariable(void);
+
   /*!
    * \brief Value of the weight of the CD, CL, CM optimization.
    * \return Value of the weight of the CD, CL, CM optimization.
