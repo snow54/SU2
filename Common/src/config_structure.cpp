@@ -1550,6 +1550,10 @@ void CConfig::SetConfig_Options(unsigned short val_iZone, unsigned short val_nZo
   addBoolOption("INCONSISTENT_DISC", Inconsistent_Disc, false);
    /* DESCRIPTION:  */
   addDoubleOption("FIX_AZIMUTHAL_LINE", FixAzimuthalLine, 90.0);
+  /* DESCRIPTION: AzimuthalWeightFrac will be multiplied to equivalent area difference above this angle */
+  addDoubleOption("AZIMUTHAL_WEIGHT_CUTOFFANGLE", AzimuthalWeightCutoffangle, 180.0);
+  /* DESCRIPTION: Fraction that will be multiplied to equivalent area difference */
+  addDoubleOption("AZIMUTHAL_WEIGHT_FRAC", AzimuthalWeightFrac, 1.0);
   /*!\brief SENS_REMOVE_SHARP
    * \n DESCRIPTION: Remove sharp edges from the sensitivity evaluation  \n Format: SENS_REMOVE_SHARP = YES \n DEFAULT: NO \ingroup Config*/
   addBoolOption("SENS_REMOVE_SHARP", Sens_Remove_Sharp, false);

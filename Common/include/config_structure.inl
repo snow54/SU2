@@ -1606,6 +1606,10 @@ inline su2double CConfig::GetCM_Target(void) { return CM_Target; }
 
 inline su2double CConfig::GetFixAzimuthalLine(void) { return FixAzimuthalLine; }
 
+inline su2double CConfig::GetAzimuthalWeightCutoffangle(void) { return AzimuthalWeightCutoffangle; }
+
+inline su2double CConfig::GetAzimuthalWeightFrac(void) { return AzimuthalWeightFrac; }
+
 inline su2double CConfig::GetCFLRedCoeff_Turb(void) { return CFLRedCoeff_Turb; }
 
 inline bool CConfig::GetGrid_Movement(void) { return Grid_Movement; }

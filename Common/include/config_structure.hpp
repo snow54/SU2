@@ -6301,6 +6301,18 @@ public:
    * \return Azimuthal line to fix due to a misalignments of the nearfield.
    */
   su2double GetFixAzimuthalLine(void);
+
+  /*!
+   * \brief AzimuthalWeightFrac will be multiplied to equivalent area difference above this angle.
+   * \return TBD.
+   */
+  su2double GetAzimuthalWeightCutoffangle(void);
+
+  /*!
+   * \brief Fraction that will be multiplied to equivalent area difference.
+   * \return TBD.
+   */
+  su2double GetAzimuthalWeightFrac(void);
   
   /*!
    * \brief Value of the weight of the CD, CL, CM optimization.

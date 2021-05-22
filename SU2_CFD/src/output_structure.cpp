@@ -10036,6 +10036,9 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
     
     /*--- Evaluate the objective function ---*/
     
+    su2double AzimuthalWeightCutoffangle = config->GetAzimuthalWeightCutoffangle();
+    su2double AzimuthalWeightFrac = config->AzimuthalWeightFrac();
+
     InverseDesign = 0;
     for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
       for (iVertex = 0; iVertex < EquivArea_PhiAngle[iPhiAngle].size(); iVertex++) {
@@ -10043,6 +10046,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
         Coord_i = Xcoord_PhiAngle[iPhiAngle][iVertex];
         
         su2double Difference = EquivArea_PhiAngle[iPhiAngle][iVertex]-TargetArea_PhiAngle[iPhiAngle][iVertex];
+        if (PhiAngleList[iPhiAngle] > AzimuthalWeightCutoffangle) Difference = Difference * AzimuthalWeightFrac;
         su2double percentage = fabs(Difference)*100/fabs(TargetArea_PhiAngle[iPhiAngle][iVertex]);
         
         if ((percentage < 0.1) || (Coord_i < XCoordBegin_OF) || (Coord_i > XCoordEnd_OF)) Difference = 0.0;
@@ -10062,6 +10066,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
           Weight_PhiAngle[iPhiAngle][iVertex] = 1.0;
           
           su2double Difference = EquivArea_PhiAngle[iPhiAngle][jVertex]-TargetArea_PhiAngle[iPhiAngle][jVertex];
+          if (PhiAngleList[iPhiAngle] > AzimuthalWeightCutoffangle) Difference = Difference * AzimuthalWeightFrac;
           su2double percentage = fabs(Difference)*100/fabs(TargetArea_PhiAngle[iPhiAngle][jVertex]);
           
           if ((percentage < 0.1) || (Coord_j < XCoordBegin_OF) || (Coord_j > XCoordEnd_OF)) Difference = 0.0;
