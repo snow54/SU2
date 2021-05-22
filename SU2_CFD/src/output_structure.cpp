@@ -9626,8 +9626,10 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
             /*--- Compute the Azimuthal angle (resolution of degress in the Azimuthal angle)---*/
             
             su2double AngleDouble; short AngleInt;
-            AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
-            
+            if (ZcoordRot == 0.0) AngleDouble = 90.0;
+            else if (ZcoordRot < 0.0) AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+            else AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER+180.0);
+//            cout << endl << AngleDouble << YcoordRot << ZcoordRot;
             /*--- Fix an azimuthal line due to misalignments of the near-field ---*/
             
             su2double FixAzimuthalLine = config->GetFixAzimuthalLine();
@@ -9639,7 +9641,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
             else AzimuthalAngle[nVertex_NearField] = 180 + AngleInt;
           }
           
-          if (AzimuthalAngle[nVertex_NearField] <= 60) {
+          if (AzimuthalAngle[nVertex_NearField] <= 180) {
             Pressure[nVertex_NearField] = solver->node[iPoint]->GetPressure();
             FaceArea[nVertex_NearField] = fabs(Face_Normal[nDim-1]);
             nVertex_NearField ++;
@@ -9672,7 +9674,8 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
         Coord = geometry->node[iPoint]->GetCoord();
         
         if (geometry->node[iPoint]->GetDomain())
-          if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0))
+          //if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0))
+          if (Face_Normal[nDim-2] < 0.0)
             nLocalVertex_NearField ++;
       }
   
@@ -9733,7 +9736,8 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
         Coord = geometry->node[iPoint]->GetCoord();
         
         if (geometry->node[iPoint]->GetDomain())
-          if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0)) {
+          //if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0)) {
+          if ((Face_Normal[nDim-2] < 0.0) ) {
             Buffer_Send_IdPoint[nLocalVertex_NearField] = iPoint;
             Buffer_Send_Xcoord[nLocalVertex_NearField] = geometry->node[iPoint]->GetCoord(0);
             Buffer_Send_Ycoord[nLocalVertex_NearField] = geometry->node[iPoint]->GetCoord(1);
@@ -9795,7 +9799,11 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
           /*--- Compute the Azimuthal angle ---*/
           
           su2double AngleDouble; short AngleInt;
-          AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+          if (ZcoordRot == 0.0) AngleDouble = 90.0;
+          else if (ZcoordRot < 0.0) AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+          else AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER+180.0);
+//          cout << endl << AngleDouble << ", " << YcoordRot << ", " << ZcoordRot;
+          /*--- This seems to be used 2019/10/22 ---*/
           
           /*--- Fix an azimuthal line due to misalignments of the near-field ---*/
           
@@ -9810,7 +9818,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
           else AzimuthalAngle[nVertex_NearField] = 180 + AngleInt;
         }
         
-        if (AzimuthalAngle[nVertex_NearField] <= 60) {
+        if (AzimuthalAngle[nVertex_NearField] <= 180) {
           IdPoint[nVertex_NearField] = Buffer_Receive_IdPoint[iProcessor*MaxLocalVertex_NearField+iVertex];
           Pressure[nVertex_NearField] = Buffer_Receive_Pressure[iProcessor*MaxLocalVertex_NearField+iVertex];
           FaceArea[nVertex_NearField] = Buffer_Receive_FaceArea[iProcessor*MaxLocalVertex_NearField+iVertex];
@@ -9898,7 +9906,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
     unsigned short nVertex = Xcoord_PhiAngle[0].size();
     for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
       unsigned short nVertex_aux = Xcoord_PhiAngle[iPhiAngle].size();
-      if (nVertex_aux != nVertex) cout <<"Be careful!!! one azimuth list is shorter than the other"<< endl;
+      if (nVertex_aux != nVertex) cout <<"Be careful!!! one azimuth list is shorter than the other "<< nVertex << ", " << nVertex_aux <<", " << PhiAngleList[iPhiAngle] << endl;
       nVertex = min(nVertex, nVertex_aux);
     }
     
@@ -10059,9 +10067,9 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
           if ((percentage < 0.1) || (Coord_j < XCoordBegin_OF) || (Coord_j > XCoordEnd_OF)) Difference = 0.0;
           
           NearFieldWeight_PhiAngle[iPhiAngle][iVertex] += EAScaleFactor*PhiFactor*Weight_PhiAngle[iPhiAngle][iVertex]*2.0*Difference*factor*sqrt(Coord_j-Coord_i);
+
         }
       }
-    
     /*--- Write the Nearfield pressure at each Azimuthal PhiAngle ---*/
     
     EquivArea_file.precision(15);
