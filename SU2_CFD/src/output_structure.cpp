@@ -9934,7 +9934,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
             EquivArea_PhiAngle[iPhiAngle][iVertex] += DeltaX * MeanFuntion;
           }
           else if(strcmp(nearVar.c_str(),"CP")==0){
-            EquivArea_PhiAngle[iPhiAngle][iVertex]=Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf;
+            EquivArea_PhiAngle[iPhiAngle][iVertex] = (Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf) / Pressure_Inf;
           } 
             
         }
