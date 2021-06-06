@@ -1556,6 +1556,8 @@ void CConfig::SetConfig_Options(unsigned short val_iZone, unsigned short val_nZo
   addDoubleOption("AZIMUTHAL_WEIGHT_FRAC", AzimuthalWeightFrac, 1.0);
   /* DESCRIPTION: Variable used for nearfield.  EA (Equivalent area) or CP (Pressure) */
   addStringOption("NEARFIELD_VARIABLE", NearfieldVariable, string("EA"));
+  /* DESCRIPTION: Use an inconsistent (primal/dual) discrete adjoint formulation */
+  addBoolOption("NEARFIELD_MULTIPOLE", NearfieldMultipole, false);
   /*!\brief SENS_REMOVE_SHARP
    * \n DESCRIPTION: Remove sharp edges from the sensitivity evaluation  \n Format: SENS_REMOVE_SHARP = YES \n DEFAULT: NO \ingroup Config*/
   addBoolOption("SENS_REMOVE_SHARP", Sens_Remove_Sharp, false);

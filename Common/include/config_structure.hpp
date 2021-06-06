@@ -169,6 +169,7 @@ private:
   su2double AzimuthalWeightCutoffangle;
   su2double AzimuthalWeightFrac;
   string NearfieldVariable;
+  bool NearfieldMultipole;
   su2double **DV_Value;		/*!< \brief Previous value of the design variable. */
   su2double Venkat_LimiterCoeff;				/*!< \brief Limiter coefficient */
   unsigned long LimiterIter;	/*!< \brief Freeze the value of the limiter after a number of iterations */
@@ -6317,7 +6318,9 @@ public:
    */
   su2double GetAzimuthalWeightFrac(void);
   
-string GetNearfieldVariable(void);
+  string GetNearfieldVariable(void);
+
+  bool GetNearfieldMultipole(void);
 
   /*!
    * \brief Value of the weight of the CD, CL, CM optimization.

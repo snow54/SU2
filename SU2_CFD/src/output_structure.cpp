@@ -9537,6 +9537,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
   *IdPoint = NULL, *IdDomain = NULL, auxDomain;
   unsigned short iPhiAngle;
   ofstream NearFieldEA_file; ifstream TargetEA_file;
+  ofstream NearFieldMultipoleOut_file; ifstream NearFieldMultipoleIn_file;
   
   su2double XCoordBegin_OF = config->GetEA_IntLimit(0);
   su2double XCoordEnd_OF = config->GetEA_IntLimit(1);
@@ -9910,6 +9911,63 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
       nVertex = min(nVertex, nVertex_aux);
     }
     
+    /*--- Apply multipole analysis to nearfield pressure distribution ---*/
+    if (config->GetNearfieldMultipole()) {
+      
+      /* Write */
+
+
+      /* Read */
+      NearFieldMultipoleIn_file.open("") // In work 2021/6/6
+      //TargetEA_file.open("TargetEA.dat", ios::in);
+    
+      if (TargetEA_file.fail()) {
+        /*--- Set the table to 0 ---*/
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
+          for (iVertex = 0; iVertex < TargetArea_PhiAngle[iPhiAngle].size(); iVertex++)
+            TargetArea_PhiAngle[iPhiAngle][iVertex] = 0.0;
+      }
+      else {
+        
+        /*--- skip header lines ---*/
+        
+        string line;
+        getline(TargetEA_file, line);
+        getline(TargetEA_file, line);
+        
+        while (TargetEA_file) {
+          
+          string line;
+          getline(TargetEA_file, line);
+          istringstream is(line);
+          vector<su2double> row;
+          unsigned short iter = 0;
+          
+          while (is.good()) {
+            string token;
+            getline(is, token,',');
+            
+            istringstream js(token);
+            
+            su2double data;
+            js >> data;
+            
+            /*--- The first element in the table is the coordinate (in or m)---*/
+            
+            if (iter != 0) row.push_back(data);
+            iter++;
+            
+          }
+          TargetArea_PhiAngle_Trans.push_back(row);
+        }
+
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
+          for (iVertex = 0; iVertex < EquivArea_PhiAngle[iPhiAngle].size(); iVertex++)
+            TargetArea_PhiAngle[iPhiAngle][iVertex] = TargetArea_PhiAngle_Trans[iVertex][iPhiAngle];
+      
+      }
+    }
+
     /*--- Compute equivalent area distribution at each azimuth angle ---*/
     
     string nearVar;
