@@ -9915,30 +9915,68 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
     if (config->GetNearfieldMultipole()) {
       
       /* Write */
+      NearFieldMultipoleOut_file.precision(15);
+      NearFieldMultipoleOut_file.open("NearfieldMultipoleOut.dat", ios::out);
+      NearFieldMultipoleOut_file << "TITLE = \"Nearfield pressure at each azimuthal angle\"" << "\n";
+      
+      if (config->GetSystemMeasurements() == US)
+        NearFieldMultipoleOut_file << "VARIABLES = \"Height (in) at r="<< R_Plane*12.0 << " in. (cyl. coord. system)\"";
+      else
+        NearFieldMultipoleOut_file << "VARIABLES = \"Height (m) at r="<< R_Plane << " m. (cylindrical coordinate system)\"";
+      
+      for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+        if (config->GetSystemMeasurements() == US)
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (ft<sup>2</sup>), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+        else
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (m<sup>2</sup>), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+      }
+      
+      NearFieldMultipoleOut_file << "\n";
+      for (iVertex = 0; iVertex < Pressure_PhiAngle[0].size(); iVertex++) {
+        
+        su2double XcoordRot = Xcoord_PhiAngle[0][iVertex]*cos(AoA) - Zcoord_PhiAngle[0][iVertex]*sin(AoA);
+        su2double XcoordRot_init = Xcoord_PhiAngle[0][0]*cos(AoA) - Zcoord_PhiAngle[0][0]*sin(AoA);
+        
+        if (config->GetSystemMeasurements() == US)
+          NearFieldMultipoleOut_file << scientific << (XcoordRot - XcoordRot_init) * 12.0;
+        else
+          NearFieldMultipoleOut_file << scientific << (XcoordRot - XcoordRot_init);
+        
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+          NearFieldMultipoleOut_file << scientific << ", " << Pressure_PhiAngle[iPhiAngle][iVertex];
+        }
+        
+        NearFieldMultipoleOut_file << "\n";
+        
+      }
+      NearFieldMultipoleOut_file.close();
 
+      /* Run multipole analysis */
+      system("multipole.sh");
 
       /* Read */
-      NearFieldMultipoleIn_file.open("") // In work 2021/6/6
+      vector<vector<su2double> > Pressure_PhiAngle_Trans;
+      NearFieldMultipoleIn_file.open("NearfieldMultipoleIn.dat", ios::in);
       //TargetEA_file.open("TargetEA.dat", ios::in);
     
-      if (TargetEA_file.fail()) {
+      if (NearFieldMultipoleIn_file.fail()) {
         /*--- Set the table to 0 ---*/
         for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
-          for (iVertex = 0; iVertex < TargetArea_PhiAngle[iPhiAngle].size(); iVertex++)
-            TargetArea_PhiAngle[iPhiAngle][iVertex] = 0.0;
+          for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
+            Pressure_PhiAngle[iPhiAngle][iVertex] = 0.0;
       }
       else {
         
         /*--- skip header lines ---*/
         
         string line;
-        getline(TargetEA_file, line);
-        getline(TargetEA_file, line);
+        getline(NearFieldMultipoleIn_file, line);
+        getline(NearFieldMultipoleIn_file, line);
         
-        while (TargetEA_file) {
+        while (NearFieldMultipoleIn_file) {
           
           string line;
-          getline(TargetEA_file, line);
+          getline(NearFieldMultipoleIn_file, line);
           istringstream is(line);
           vector<su2double> row;
           unsigned short iter = 0;
@@ -9958,12 +9996,12 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
             iter++;
             
           }
-          TargetArea_PhiAngle_Trans.push_back(row);
+          Pressure_PhiAngle_Trans.push_back(row);
         }
 
         for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
-          for (iVertex = 0; iVertex < EquivArea_PhiAngle[iPhiAngle].size(); iVertex++)
-            TargetArea_PhiAngle[iPhiAngle][iVertex] = TargetArea_PhiAngle_Trans[iVertex][iPhiAngle];
+          for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
+            Pressure_PhiAngle[iPhiAngle][iVertex] = Pressure_PhiAngle_Trans[iVertex][iPhiAngle];
       
       }
     }
