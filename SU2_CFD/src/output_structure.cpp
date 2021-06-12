@@ -9926,9 +9926,9 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
       
       for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
         if (config->GetSystemMeasurements() == US)
-          NearFieldMultipoleOut_file << ", \"Nearfield pressure (ft<sup>2</sup>), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (?), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
         else
-          NearFieldMultipoleOut_file << ", \"Nearfield pressure (m<sup>2</sup>), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (Pa), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
       }
       
       NearFieldMultipoleOut_file << "\n";
@@ -9943,7 +9943,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
           NearFieldMultipoleOut_file << scientific << (XcoordRot - XcoordRot_init);
         
         for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
-          NearFieldMultipoleOut_file << scientific << ", " << Pressure_PhiAngle[iPhiAngle][iVertex];
+          NearFieldMultipoleOut_file << scientific << ", " << Pressure_PhiAngle[iPhiAngle][iVertex]-Pressure_Inf;
         }
         
         NearFieldMultipoleOut_file << "\n";
@@ -10001,7 +10001,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
 
         for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
           for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
-            Pressure_PhiAngle[iPhiAngle][iVertex] = Pressure_PhiAngle_Trans[iVertex][iPhiAngle];
+            Pressure_PhiAngle[iPhiAngle][iVertex] = Pressure_PhiAngle_Trans[iVertex][iPhiAngle]+Pressure_Inf;
       
       }
     }
