@@ -1612,6 +1612,8 @@ inline su2double CConfig::GetAzimuthalWeightFrac(void) { return AzimuthalWeightF
 
 inline string CConfig::GetNearfieldVariable(void) { return NearfieldVariable; }
 
+inline bool CConfig::GetNearfieldMultipole(void) { return NearfieldMultipole; }
+
 inline su2double CConfig::GetCFLRedCoeff_Turb(void) { return CFLRedCoeff_Turb; }
 
 inline bool CConfig::GetGrid_Movement(void) { return Grid_Movement; }

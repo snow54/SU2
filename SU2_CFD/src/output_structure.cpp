@@ -9537,6 +9537,7 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
   *IdPoint = NULL, *IdDomain = NULL, auxDomain;
   unsigned short iPhiAngle;
   ofstream NearFieldEA_file; ifstream TargetEA_file;
+  ofstream NearFieldMultipoleOut_file; ifstream NearFieldMultipoleIn_file;
   
   su2double XCoordBegin_OF = config->GetEA_IntLimit(0);
   su2double XCoordEnd_OF = config->GetEA_IntLimit(1);
@@ -9910,6 +9911,101 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
       nVertex = min(nVertex, nVertex_aux);
     }
     
+    /*--- Apply multipole analysis to nearfield pressure distribution ---*/
+    if (config->GetNearfieldMultipole()) {
+      
+      /* Write */
+      NearFieldMultipoleOut_file.precision(15);
+      NearFieldMultipoleOut_file.open("NearfieldMultipoleOut.dat", ios::out);
+      NearFieldMultipoleOut_file << "TITLE = \"Nearfield pressure at each azimuthal angle\"" << "\n";
+      
+      if (config->GetSystemMeasurements() == US)
+        NearFieldMultipoleOut_file << "VARIABLES = \"Height (in) at r="<< R_Plane*12.0 << " in. (cyl. coord. system)\"";
+      else
+        NearFieldMultipoleOut_file << "VARIABLES = \"Height (m) at r="<< R_Plane << " m. (cylindrical coordinate system)\"";
+      
+      for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+        if (config->GetSystemMeasurements() == US)
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (?), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+        else
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (Pa), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+      }
+      
+      NearFieldMultipoleOut_file << "\n";
+      for (iVertex = 0; iVertex < Pressure_PhiAngle[0].size(); iVertex++) {
+        
+        su2double XcoordRot = Xcoord_PhiAngle[0][iVertex]*cos(AoA) - Zcoord_PhiAngle[0][iVertex]*sin(AoA);
+        su2double XcoordRot_init = Xcoord_PhiAngle[0][0]*cos(AoA) - Zcoord_PhiAngle[0][0]*sin(AoA);
+        
+        if (config->GetSystemMeasurements() == US)
+          NearFieldMultipoleOut_file << scientific << (XcoordRot - XcoordRot_init) * 12.0;
+        else
+          NearFieldMultipoleOut_file << scientific << (XcoordRot - XcoordRot_init);
+        
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+          NearFieldMultipoleOut_file << scientific << ", " << Pressure_PhiAngle[iPhiAngle][iVertex]-Pressure_Inf;
+        }
+        
+        NearFieldMultipoleOut_file << "\n";
+        
+      }
+      NearFieldMultipoleOut_file.close();
+
+      /* Run multipole analysis */
+      system("multipole.sh");
+
+      /* Read */
+      vector<vector<su2double> > Pressure_PhiAngle_Trans;
+      NearFieldMultipoleIn_file.open("NearfieldMultipoleIn.dat", ios::in);
+      //TargetEA_file.open("TargetEA.dat", ios::in);
+    
+      if (NearFieldMultipoleIn_file.fail()) {
+        /*--- Set the table to 0 ---*/
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
+          for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
+            Pressure_PhiAngle[iPhiAngle][iVertex] = 0.0;
+      }
+      else {
+        
+        /*--- skip header lines ---*/
+        
+        string line;
+        getline(NearFieldMultipoleIn_file, line);
+        getline(NearFieldMultipoleIn_file, line);
+        
+        while (NearFieldMultipoleIn_file) {
+          
+          string line;
+          getline(NearFieldMultipoleIn_file, line);
+          istringstream is(line);
+          vector<su2double> row;
+          unsigned short iter = 0;
+          
+          while (is.good()) {
+            string token;
+            getline(is, token,',');
+            
+            istringstream js(token);
+            
+            su2double data;
+            js >> data;
+            
+            /*--- The first element in the table is the coordinate (in or m)---*/
+            
+            if (iter != 0) row.push_back(data);
+            iter++;
+            
+          }
+          Pressure_PhiAngle_Trans.push_back(row);
+        }
+
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
+          for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
+            Pressure_PhiAngle[iPhiAngle][iVertex] = Pressure_PhiAngle_Trans[iVertex][iPhiAngle]+Pressure_Inf;
+      
+      }
+    }
+
     /*--- Compute equivalent area distribution at each azimuth angle ---*/
     
     string nearVar;
