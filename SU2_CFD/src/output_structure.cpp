@@ -10017,8 +10017,9 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
         
         Coord_i = Xcoord_PhiAngle[iPhiAngle][iVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][iVertex]*sin(AoA);
         
-        for (jVertex = 0; jVertex < iVertex-1; jVertex++) {
-          if (strcmp(nearVar.c_str(),"EA")==0){
+        if (strcmp(nearVar.c_str(),"EA")==0){
+          for (jVertex = 0; jVertex < iVertex-1; jVertex++) {
+          
             Coord_j = Xcoord_PhiAngle[iPhiAngle][jVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex]*sin(AoA);
             jp1Coord = Xcoord_PhiAngle[iPhiAngle][jVertex+1]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex+1]*sin(AoA);
             
@@ -10029,9 +10030,9 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
             MeanFuntion = 0.5*(jp1Function + jFunction);
             EquivArea_PhiAngle[iPhiAngle][iVertex] += DeltaX * MeanFuntion;
           }
-          else if(strcmp(nearVar.c_str(),"CP")==0){
-            EquivArea_PhiAngle[iPhiAngle][iVertex] = (Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf) / Pressure_Inf;
-          } 
+        }
+        else if(strcmp(nearVar.c_str(),"CP")==0){
+          EquivArea_PhiAngle[iPhiAngle][iVertex] = (Pressure_PhiAngle[iPhiAngle][iVertex] - Pressure_Inf) / Pressure_Inf; 
             
         }
       }
