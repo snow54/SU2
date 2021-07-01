@@ -10001,8 +10001,9 @@ void COutput::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry, CCon
 
         for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
           for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
-            Pressure_PhiAngle[iPhiAngle][iVertex] = Pressure_PhiAngle_Trans[iVertex][iPhiAngle]+Pressure_Inf;
-      
+            SU2_TYPE::SetValue(Pressure_PhiAngle.at(iPhiAngle).at(iVertex),SU2_TYPE::GetValue(Pressure_PhiAngle_Trans.at(iVertex).at(iPhiAngle)+Pressure_Inf));
+            //SU2_TYPE::SetValue(Pressure_PhiAngle.at(iPhiAngle).at(iVertex),SU2_TYPE::GetValue(Pressure_PhiAngletmp.at(iPhiAngle).at(iVertex)));
+            
       }
     }
 
