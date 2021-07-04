@@ -347,7 +347,7 @@ void CDiscAdjFluidIteration::Iterate(COutput* output, CIntegration**** integrati
   bool heat = config[iZone]->GetWeakly_Coupled_Heat();
 
   /*--- Extract the adjoints of the conservative input variables and store them for the next iteration ---*/
-
+  cout << "CDiscAdjFluidIteration::Iterate 1" << endl;
   if (config[iZone]->GetFluidProblem()) {
     solver[iZone][iInst][MESH_0][ADJFLOW_SOL]->ExtractAdjoint_Solution(geometry[iZone][iInst][MESH_0], config[iZone]);
 
@@ -364,6 +364,7 @@ void CDiscAdjFluidIteration::Iterate(COutput* output, CIntegration**** integrati
 
     solver[iZone][iInst][MESH_0][ADJRAD_SOL]->ExtractAdjoint_Variables(geometry[iZone][iInst][MESH_0], config[iZone]);
   }
+  cout << "CDiscAdjFluidIteration::Iterate 2" << endl;
 }
 
 void CDiscAdjFluidIteration::InitializeAdjoint(CSolver***** solver, CGeometry**** geometry, CConfig** config,
@@ -372,7 +373,7 @@ void CDiscAdjFluidIteration::InitializeAdjoint(CSolver***** solver, CGeometry***
   bool heat = config[iZone]->GetWeakly_Coupled_Heat();
 
   /*--- Initialize the adjoints the conservative variables ---*/
-
+  cout << "In CDiscAdjFluidIteration::InitializeAdjoint 1" << endl;
   if (config[iZone]->GetFluidProblem()) {
     solver[iZone][iInst][MESH_0][ADJFLOW_SOL]->SetAdjoint_Output(geometry[iZone][iInst][MESH_0], config[iZone]);
   }
@@ -388,10 +389,12 @@ void CDiscAdjFluidIteration::InitializeAdjoint(CSolver***** solver, CGeometry***
   if (config[iZone]->AddRadiation()) {
     solver[iZone][iInst][MESH_0][ADJRAD_SOL]->SetAdjoint_Output(geometry[iZone][iInst][MESH_0], config[iZone]);
   }
+  cout << "In CDiscAdjFluidIteration::InitializeAdjoint 2" << endl;
 
   if (config[iZone]->GetFluidProblem()) {
     solver[iZone][iInst][MESH_0][FLOW_SOL]->SetVertexTractionsAdjoint(geometry[iZone][iInst][MESH_0], config[iZone]);
   }
+  cout << "In CDiscAdjFluidIteration::InitializeAdjoint 3" << endl;
 }
 
 void CDiscAdjFluidIteration::RegisterInput(CSolver***** solver, CGeometry**** geometry, CConfig** config,

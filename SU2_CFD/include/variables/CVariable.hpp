@@ -2425,6 +2425,12 @@ public:
    * \param[in] adj_sol - The adjoint values of the solution.
    */
   inline void SetAdjointSolution(unsigned long iPoint, const su2double *adj_sol) {
+    for (unsigned long iVar = 0; iVar < nVar; iVar++){
+    cout << "In SetAdjointSolution, iVar=" << iVar << endl;
+    cout << "Solution(iPoint,iVar)=" << Solution(iPoint,iVar) << endl;
+    cout << "adj_sol[ivar]=" << adj_sol[iVar] << endl;
+    cout << "GetValue=" << SU2_TYPE::GetValue(adj_sol[iVar]) << endl;
+    }
     for (unsigned long iVar = 0; iVar < nVar; iVar++)
       SU2_TYPE::SetDerivative(Solution(iPoint,iVar), SU2_TYPE::GetValue(adj_sol[iVar]));
   }

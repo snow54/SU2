@@ -618,6 +618,13 @@ void COutputLegacy::SetConvHistory_Body(ofstream *ConvHist_file,
   bool compressible = (config[val_iZone]->GetKind_Regime() == COMPRESSIBLE);
   bool incompressible = (config[val_iZone]->GetKind_Regime() == INCOMPRESSIBLE);
 
+  cout << "in output_structure_legacy.cpp, disc_adj=" << disc_adj << ", cont_adj=" << cont_adj << ", DualTime_Iteration=" << DualTime_Iteration << endl;
+  cout << (iExtIter % (config[val_iZone]->GetVolume_Wrt_Freq())) << endl;
+  cout << (fixed_cl && (iExtIter == (config[val_iZone]->GetnInner_Iter()-1))) << endl;
+  cout << (fixed_cl && (iExtIter == (config[val_iZone]->GetnInner_Iter()-2) ||
+          (solver_container[val_iZone][val_iInst][MESH_0][FLOW_SOL]->GetStart_AoA_FD() &&
+          iExtIter == solver_container[val_iZone][val_iInst][MESH_0][FLOW_SOL]->GetIter_Update_AoA()))) << endl;
+
   if (!disc_adj && !cont_adj && !DualTime_Iteration) {
 
     if (fixed_cl &&
@@ -4996,22 +5003,33 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
   su2double AoA = -(config->GetAoA()*PI_NUMBER/180.0);
   su2double EAScaleFactor = config->GetEA_ScaleFactor(); // The EA Obj. Func. should be ~ force based Obj. Func.
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1" << endl;
   Mach  = config->GetMach();
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1 after GetMach" << endl;
   Gamma = config->GetGamma();
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1a" << endl;
   Beta = sqrt(Mach*Mach-1.0);
   R_Plane = fabs(config->GetEA_IntLimit(2));
   Pressure_Inf = config->GetPressure_FreeStreamND();
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1b" << endl;
   Velocity_Inf[0] = config->GetVelocity_FreeStreamND()[0];
   Velocity_Inf[1] = config->GetVelocity_FreeStreamND()[1];
   Velocity_Inf[2] = config->GetVelocity_FreeStreamND()[2];
   ModVelocity_Inf = 0;
+
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1c" << endl;
   for (iDim = 0; iDim < 3; iDim++)
     ModVelocity_Inf += Velocity_Inf[iDim] * Velocity_Inf[iDim];
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1d" << endl;
 
   factor = 4.0*sqrt(2.0*Beta*R_Plane) / (Gamma*Pressure_Inf*Mach*Mach);
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1e" << endl;
+  cout << "MASTER_NODE=" << MASTER_NODE << endl;
+  cout << "rank=" << rank << endl;
 
   if (rank == MASTER_NODE) cout << endl << "Writing Equivalent Area files.";
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1f" << endl;
 #ifndef HAVE_MPI
 
   /*--- Compute the total number of points on the near-field ---*/
@@ -5033,6 +5051,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
   /*--- Create an array with all the coordinates, points, pressures, face area,
    equivalent area, and nearfield weight ---*/
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 1g" << endl;
   Xcoord = new su2double[nVertex_NearField];
   Ycoord = new su2double[nVertex_NearField];
   Zcoord = new su2double[nVertex_NearField];
@@ -5048,6 +5067,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
 
   /*--- Copy the boundary information to an array ---*/
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 2" << endl;
   nVertex_NearField = 0;
   for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++)
     if (config->GetMarker_All_KindBC(iMarker) == NEARFIELD_BOUNDARY)
@@ -5101,6 +5121,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
 
 #else
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 3" << endl;
   int nProcessor;
   SU2_MPI::Comm_size(SU2_MPI::GetComm(), &nProcessor);
 
@@ -5284,6 +5305,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
 
 #endif
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 4" << endl;
   if (rank == MASTER_NODE) {
 
     vector<short> PhiAngleList;
@@ -5377,6 +5399,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
       }
     }
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 5" << endl;
     /*--- Create a file with the equivalent area distribution at each azimuthal angle ---*/
 
     NearFieldEA_file.precision(15);
@@ -5473,6 +5496,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
 
     }
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 6" << endl;
     /*--- Divide by the number of Phi angles in the nearfield ---*/
 
     su2double PhiFactor = 1.0/su2double(PhiAngleList.size());
@@ -5515,6 +5539,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
 
     /*--- Write the Nearfield pressure at each Azimuthal PhiAngle ---*/
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 7" << endl;
     EquivArea_file.precision(15);
 
     if (output) {
@@ -5572,6 +5597,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
 
     }
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 8" << endl;
     /*--- Delete structures ---*/
 
     delete [] Xcoord; delete [] Ycoord; delete [] Zcoord;
@@ -5600,6 +5626,7 @@ void COutputLegacy::SpecialOutput_SonicBoom(CSolver *solver, CGeometry *geometry
 
 #endif
 
+  cout << "In COutputLegacy::SpecialOutput_SonicBoom 9" << endl;
 }
 
 void COutputLegacy::SpecialOutput_Distortion(CSolver *solver, CGeometry *geometry, CConfig *config, bool output) const {

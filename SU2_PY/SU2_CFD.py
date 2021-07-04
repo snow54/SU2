@@ -77,7 +77,7 @@ def main():
     comm = MPI.COMM_WORLD
   else:
     comm = 0 
-
+  cout << "In SU2_CFD, main" << endl;
   # Initialize the corresponding driver of SU2, this includes solver preprocessing
   try:
     if (options.nZone == 1) and ( options.fem or options.poisson_equation or options.wave_equation or options.heat_equation ):

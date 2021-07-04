@@ -615,23 +615,29 @@ void CDiscAdjSolver::SetAdjoint_Output(CGeometry *geometry, CConfig *config) {
 
   unsigned short iVar;
   unsigned long iPoint;
-
+  cout << "CDiscAdjSolver::SetAdjoint_Output 1" << endl;
   for (iPoint = 0; iPoint < nPoint; iPoint++) {
+    cout << "CDiscAdjSolver::SetAdjoint_Output, iPoint=" << iPoint << endl;
     for (iVar = 0; iVar < nVar; iVar++) {
       Solution[iVar] = nodes->GetSolution(iPoint,iVar);
     }
+    cout << "CDiscAdjSolver::SetAdjoint_Output, after GetSolution" << endl;
+    
     if (dual_time) {
       for (iVar = 0; iVar < nVar; iVar++) {
         Solution[iVar] += nodes->GetDual_Time_Derivative(iPoint,iVar);
       }
     }
+    cout << "CDiscAdjSolver::SetAdjoint_Output, after GetDual_Time_Derivative" << endl;
     if(config->GetMultizone_Problem()) {
       direct_solver->GetNodes()->SetAdjointSolution_LocalIndex(iPoint,Solution);
     }
     else {
       direct_solver->GetNodes()->SetAdjointSolution(iPoint,Solution);
     }
+    cout << "CDiscAdjSolver::SetAdjoint_Output, after SetAdjointSolution" << endl;
   }
+  cout << "CDiscAdjSolver::SetAdjoint_Output 2" << endl;
 }
 
 void CDiscAdjSolver::SetAdjoint_OutputMesh(CGeometry *geometry, CConfig *config){

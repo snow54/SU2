@@ -491,9 +491,11 @@ class Project(object):
     def plot_results(self):
         """ writes a tecplot file for plotting design results
         """
+        print('In plot_results, before')
         output_format = self.config.TABULAR_FORMAT
         functions     = self.results.FUNCTIONS
         history       = self.results.HISTORY
+        print('In plot_results, after')
         
         results_plot = su2util.ordered_bunch()
         results_plot.EVALUATION = range(1,len(self.designs)+1)

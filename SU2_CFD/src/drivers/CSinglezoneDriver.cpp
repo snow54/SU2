@@ -30,20 +30,61 @@
 #include "../../include/output/COutput.hpp"
 #include "../../include/iteration/CIteration.hpp"
 
+
+#include "../../include/output/COutputFactory.hpp"
+#include "../../include/output/COutputLegacy.hpp"
+
 CSinglezoneDriver::CSinglezoneDriver(char* confFile,
                        unsigned short val_nZone,
                        SU2_Comm MPICommunicator) : CDriver(confFile,
                                                           val_nZone,
                                                           MPICommunicator,
                                                           false) {
+  cout << "In CSinglezoneDriver 1" << endl;
+  output_legacy = COutputFactory::CreateLegacyOutput(config_container[ZONE_0]);
+  cout << "In CSinglezoneDriver 2" << endl;
 
+
+  ConvHist_file = nullptr;
+  ConvHist_file = new ofstream*[nZone];
+  for (iZone = 0; iZone < nZone; iZone++) {
+    ConvHist_file[iZone] = nullptr;
+    if (rank == MASTER_NODE){
+      ConvHist_file[iZone] = new ofstream[nInst[iZone]];
+      for (iInst = 0; iInst < nInst[iZone]; iInst++) {
+        output_legacy->SetConvHistory_Header(&ConvHist_file[iZone][iInst], config_container[iZone], iZone, iInst);
+      }
+    }
+  }
+  /*
+  if (nZone > 1){
+    Max_Iter = config_container[ZONE_0]->GetnOuter_Iter();
+  }
+  */
   /*--- Initialize the counter for TimeIter ---*/
   TimeIter = 0;
 
 }
 
 CSinglezoneDriver::~CSinglezoneDriver(void) {
+  cout << "In ~CSinglezoneDriver" << endl;
+  if (rank == MASTER_NODE){
+  /*--- Close the convergence history file. ---*/
+  for (iZone = 0; iZone < nZone; iZone++) {
+    cout << "In ~CSinglezoneDriver, before close" << endl;
 
+    for (iInst = 0; iInst < 1; iInst++) {
+      cout << "iInst=" << iInst << endl;
+      ConvHist_file[iZone][iInst].close();
+    }
+    cout << "In ~CSinglezoneDriver, after close" << endl;
+
+    delete [] ConvHist_file[iZone];
+  }
+  delete [] ConvHist_file;
+
+  cout << "In CSinglezoneDriver, end of if" << endl;
+  }
 }
 
 void CSinglezoneDriver::StartSolver() {
@@ -74,22 +115,26 @@ void CSinglezoneDriver::StartSolver() {
     /*--- Perform some preprocessing before starting the time-step simulation. ---*/
 
     Preprocess(TimeIter);
-
+    cout << "In StartSolver after Preprocess" << endl;
     /*--- Run a time-step iteration of the single-zone problem. ---*/
 
     Run();
+    cout << "In StartSolver after Run" << endl;
 
     /*--- Perform some postprocessing on the solution before the update ---*/
 
     Postprocess();
+    cout << "In StartSolver after Postprocess" << endl;
 
     /*--- Update the solution for dual time stepping strategy ---*/
 
     Update();
+    cout << "In StartSolver after Update" << endl;
 
     /*--- Monitor the computations after each iteration. ---*/
 
     Monitor(TimeIter);
+    cout << "In StartSolver after Monitor" << endl;
 
     /*--- Output the solution in files. ---*/
 
@@ -149,12 +194,35 @@ void CSinglezoneDriver::Preprocess(unsigned long TimeIter) {
 void CSinglezoneDriver::Run() {
 
   unsigned long OuterIter = 0;
+  cout << "In CSinglezoneDriver 1" << endl;
   config_container[ZONE_0]->SetOuterIter(OuterIter);
 
+  cout << "In CSinglezoneDriver 2" << endl;
   /*--- Iterate the zone as a block, either to convergence or to a max number of iterations ---*/
   iteration_container[ZONE_0][INST_0]->Solve(output_container[ZONE_0], integration_container, geometry_container, solver_container,
         numerics_container, config_container, surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
 
+  cout << "In CSinglezoneDriver 3" << endl;
+  /*--- Update the convergence history file (serial and parallel computations). ---*/
+  cout << "In CSinglezoneDriver" << endl;
+  for (iZone = 0; iZone < nZone; iZone++) {
+    cout << iZone << endl;
+    cout << nInst << endl;
+    cout << nInst[iZone] << endl;
+    cout << &ConvHist_file[iZone][iInst] << endl;
+    cout << geometry_container << endl;
+    cout << solver_container << endl;
+    cout << config_container << endl;
+    cout << integration_container << endl;
+    cout << UsedTime << endl;
+    cout << iZone << endl;
+    cout << iInst << endl;
+    for (iInst = 0; iInst < nInst[iZone]; iInst++)
+      output_legacy->SetConvHistory_Body(&ConvHist_file[iZone][iInst], geometry_container, solver_container,
+          config_container, integration_container, false, UsedTime, iZone, iInst);
+  }
+
+  cout << "In CSinglezoneDriver 4" << endl;
 }
 
 void CSinglezoneDriver::Postprocess() {
@@ -171,11 +239,12 @@ void CSinglezoneDriver::Postprocess() {
 }
 
 void CSinglezoneDriver::Update() {
-
+  cout << "In Update 1" << endl;
   iteration_container[ZONE_0][INST_0]->Update(output_container[ZONE_0], integration_container, geometry_container,
         solver_container, numerics_container, config_container,
         surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
 
+  cout << "In Update 2" << endl;
 }
 
 void CSinglezoneDriver::Output(unsigned long TimeIter) {

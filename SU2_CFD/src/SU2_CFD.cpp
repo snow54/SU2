@@ -161,18 +161,18 @@ int main(int argc, char *argv[]) {
   /*--- Postprocess all the containers, close history file, exit SU2. ---*/
 
   driver->Postprocessing();
-
+  cout << "main, ln.164" << endl;
   delete driver;
   driver = nullptr;
-
+  cout << "main, ln.167" << endl;
   /*---Finalize libxsmm, if supported. ---*/
 #ifdef HAVE_LIBXSMM
   libxsmm_finalize();
 #endif
-
+  cout << "main, ln.172" << endl;
   /*--- Finalize MPI parallelization. ---*/
   SU2_MPI::Finalize();
-
+  cout << "main, ln.175" << endl;
   return EXIT_SUCCESS;
 
 }

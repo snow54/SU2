@@ -77,6 +77,7 @@ CDiscAdjSinglezoneDriver::CDiscAdjSinglezoneDriver(char* confFile,
       output_legacy = COutputFactory::CreateLegacyOutput(config_container[ZONE_0]);
     }
     else       direct_iteration = CIterationFactory::CreateIteration(EULER, config);
+    output_legacy = COutputFactory::CreateLegacyOutput(config_container[ZONE_0]);
     if (compressible) direct_output = COutputFactory::CreateOutput(EULER, config, nDim);
     else direct_output =  COutputFactory::CreateOutput(INC_EULER, config, nDim);
     MainVariables = SOLUTION_VARIABLES;
@@ -149,13 +150,13 @@ void CDiscAdjSinglezoneDriver::Preprocess(unsigned long TimeIter) {
     MainRecording();
 
   }
-
+  cout << "In Preprocess" << endl;
 }
 
 void CDiscAdjSinglezoneDriver::Run() {
 
   const bool steady = !config->GetTime_Domain();
-
+  cout << "In CDiscAdjSinglezoneDriver::Run 1" << endl;
   CQuasiNewtonInvLeastSquares<passivedouble> fixPtCorrector;
   if (config->GetnQuasiNewtonSamples() > 1) {
     fixPtCorrector.resize(config->GetnQuasiNewtonSamples(),
@@ -165,6 +166,7 @@ void CDiscAdjSinglezoneDriver::Run() {
 
     if (TimeIter != 0) GetAllSolutions(ZONE_0, true, fixPtCorrector);
   }
+  cout << "In CDiscAdjSinglezoneDriver::Run 2" << endl;
 
   for (auto Adjoint_Iter = 0ul; Adjoint_Iter < nAdjoint_Iter; Adjoint_Iter++) {
 
@@ -173,32 +175,39 @@ void CDiscAdjSinglezoneDriver::Run() {
      *--- Issues with iteration number should be dealt with once the output structure is in place. ---*/
 
     config->SetInnerIter(Adjoint_Iter);
+    cout << "In CDiscAdjSinglezoneDriver::Run 3" << endl;
 
     iteration->InitializeAdjoint(solver_container, geometry_container, config_container, ZONE_0, INST_0);
+    cout << "In CDiscAdjSinglezoneDriver::Run 4" << endl;
 
     /*--- Initialize the adjoint of the objective function with 1.0. ---*/
 
     SetAdj_ObjFunction();
+    cout << "In CDiscAdjSinglezoneDriver::Run 5" << endl;
 
     /*--- Interpret the stored information by calling the corresponding routine of the AD tool. ---*/
 
     AD::ComputeAdjoint();
+    cout << "In CDiscAdjSinglezoneDriver::Run 6" << endl;
 
     /*--- Extract the computed adjoint values of the input variables and store them for the next iteration. ---*/
 
     iteration->Iterate(output_container[ZONE_0], integration_container, geometry_container,
                          solver_container, numerics_container, config_container,
                          surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
+    cout << "In CDiscAdjSinglezoneDriver::Run 7" << endl;
 
     /*--- Monitor the pseudo-time ---*/
 
     StopCalc = iteration->Monitor(output_container[ZONE_0], integration_container, geometry_container,
                                   solver_container, numerics_container, config_container,
                                   surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
+    cout << "In CDiscAdjSinglezoneDriver::Run 8" << endl;
 
     /*--- Clear the stored adjoint information to be ready for a new evaluation. ---*/
 
     AD::ClearAdjoints();
+    cout << "In CDiscAdjSinglezoneDriver::Run 9" << endl;
 
     /*--- Output files for steady state simulations. ---*/
 
@@ -206,8 +215,10 @@ void CDiscAdjSinglezoneDriver::Run() {
       iteration->Output(output_container[ZONE_0], geometry_container, solver_container,
                         config_container, Adjoint_Iter, false, ZONE_0, INST_0);
     }
+    cout << "In CDiscAdjSinglezoneDriver::Run 10" << endl;
 
     if (StopCalc) break;
+    cout << "In CDiscAdjSinglezoneDriver::Run 11" << endl;
 
     /*--- Correct the solution with the quasi-Newton approach. ---*/
 
@@ -215,6 +226,7 @@ void CDiscAdjSinglezoneDriver::Run() {
       GetAllSolutions(ZONE_0, true, fixPtCorrector.FPresult());
       SetAllSolutions(ZONE_0, true, fixPtCorrector.compute());
     }
+  cout << "In CDiscAdjSinglezoneDriver::Run 12" << endl;
 
   }
 
@@ -267,29 +279,34 @@ void CDiscAdjSinglezoneDriver::SetRecording(unsigned short kind_recording){
     iteration->RegisterInput(solver_container, geometry_container, config_container, ZONE_0, INST_0, kind_recording);
 
   }
-
+  cout << "In SetRecording, 1" << endl;
   /*--- Set the dependencies of the iteration ---*/
 
   iteration->SetDependencies(solver_container, geometry_container, numerics_container, config_container, ZONE_0,
                              INST_0, kind_recording);
 
+  cout << "In SetRecording, 2" << endl;
   /*--- Do one iteration of the direct solver ---*/
 
   DirectRun(kind_recording);
+  cout << "In SetRecording, 3" << endl;
 
   // NOTE: The inverse design calls were moved to DirectRun() - postprocess
 
   /*--- Store the recording state ---*/
 
   RecordingState = kind_recording;
+  cout << "In SetRecording, 4" << endl;
 
   /*--- Register Output of the iteration ---*/
 
   iteration->RegisterOutput(solver_container, geometry_container, config_container, output_container[ZONE_0], ZONE_0, INST_0);
 
+  cout << "In SetRecording, 5" << endl;
   /*--- Extract the objective function and store it --- */
 
   SetObjFunction();
+  cout << "In SetRecording, 6" << endl;
 
   if (kind_recording != NONE && config_container[ZONE_0]->GetWrt_AD_Statistics()) {
     if (rank == MASTER_NODE) AD::PrintStatistics();
@@ -306,9 +323,11 @@ void CDiscAdjSinglezoneDriver::SetRecording(unsigned short kind_recording){
     }
 #endif
   }
+  cout << "In SetRecording, 7" << endl;
 
   AD::StopRecording();
 
+  cout << "In SetRecording, 8" << endl;
 }
 
 void CDiscAdjSinglezoneDriver::SetAdj_ObjFunction(){
@@ -318,9 +337,10 @@ void CDiscAdjSinglezoneDriver::SetAdj_ObjFunction(){
   su2double seeding = 1.0;
 
   CWindowingTools windowEvaluator = CWindowingTools();
-
+  cout << "In SetAdj_ObjFunction 1" << endl;
   if (time_stepping){
     if (TimeIter < IterAvg_Obj){
+      cout << "In SetAdj_ObjFunction, TimeIter=" << TimeIter << endl;
       // Default behavior (in case no specific window is chosen) is to use Square-Windowing, i.e. the numerator equals 1.0
       seeding = windowEvaluator.GetWndWeight(config->GetKindWindow(),TimeIter, IterAvg_Obj-1)/ (static_cast<su2double>(IterAvg_Obj));
     }
@@ -328,12 +348,14 @@ void CDiscAdjSinglezoneDriver::SetAdj_ObjFunction(){
       seeding = 0.0;
     }
   }
+  cout << "In SetAdj_ObjFunction 2" << endl;
 
   if (rank == MASTER_NODE){
     SU2_TYPE::SetDerivative(ObjFunc, SU2_TYPE::GetValue(seeding));
   } else {
     SU2_TYPE::SetDerivative(ObjFunc, 0.0);
   }
+  cout << "In SetAdj_ObjFunction 3" << endl;
 }
 
 void CDiscAdjSinglezoneDriver::SetObjFunction(){
@@ -362,9 +384,10 @@ void CDiscAdjSinglezoneDriver::SetObjFunction(){
 
 //    if ((config->GetnMarker_Analyze() != 0) && compressible)
 //      output->SpecialOutput_Distortion(solver[FLOW_SOL], geometry, config, false);
-
-//    if (config->GetnMarker_NearFieldBound() != 0)
-//      output->SpecialOutput_SonicBoom(solver[FLOW_SOL], geometry, config, false);
+cout << "In CDiscAdjSinglezoneDriver::SetObjFunction, before SpecialOutput_SonicBoom" << endl;
+    if (config->GetnMarker_NearFieldBound() != 0)
+      output_legacy->SpecialOutput_SonicBoom(solver[FLOW_SOL], geometry, config, false);
+cout << "In CDiscAdjSinglezoneDriver::SetObjFunction, before SpecialOutput_SonicBoom" << endl;
 
 //    if (config->GetPlot_Section_Forces())
 //      output->SpecialOutput_SpanLoad(solver[FLOW_SOL], geometry, config, false);
@@ -440,22 +463,26 @@ void CDiscAdjSinglezoneDriver::SetObjFunction(){
 void CDiscAdjSinglezoneDriver::DirectRun(unsigned short kind_recording){
 
   /*--- Mesh movement ---*/
-
+  cout << "CDiscAdjSinglezoneDriver::DirectRun 1" << endl;
   direct_iteration->SetMesh_Deformation(geometry_container[ZONE_0][INST_0], solver, numerics, config, kind_recording);
 
   /*--- Zone preprocessing ---*/
+  cout << "CDiscAdjSinglezoneDriver::DirectRun 2" << endl;
 
   direct_iteration->Preprocess(direct_output, integration_container, geometry_container, solver_container, numerics_container, config_container, surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
 
   /*--- Iterate the direct solver ---*/
+  cout << "CDiscAdjSinglezoneDriver::DirectRun 3" << endl;
 
   direct_iteration->Iterate(direct_output, integration_container, geometry_container, solver_container, numerics_container, config_container, surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
 
   /*--- Postprocess the direct solver ---*/
+  cout << "CDiscAdjSinglezoneDriver::DirectRun 4" << endl;
 
   direct_iteration->Postprocess(direct_output, integration_container, geometry_container, solver_container, numerics_container, config_container, surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
 
   /*--- Print the direct residual to screen ---*/
+  cout << "CDiscAdjSinglezoneDriver::DirectRun 5" << endl;
 
   Print_DirectResidual(kind_recording);
 

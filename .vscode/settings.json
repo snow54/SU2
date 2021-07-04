@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "ostream": "cpp",
+        "future": "cpp",
+        "iostream": "cpp",
+        "fstream": "cpp"
+    }
+}

@@ -39,7 +39,7 @@ class CSinglezoneDriver : public CDriver {
 protected:
 
   unsigned long TimeIter;
-
+  COutputLegacy* output_legacy;
 public:
 
   /*!
