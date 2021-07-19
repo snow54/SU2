@@ -813,6 +813,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
   *IdPoint = nullptr, *IdDomain = nullptr, auxDomain;
   unsigned short iPhiAngle;
   ofstream NearFieldEA_file; ifstream TargetEA_file;
+  ofstream NearFieldMultipoleOut_file; ifstream NearFieldMultipoleIn_file;
 
   su2double XCoordBegin_OF = config->GetEA_IntLimit(0);
   su2double XCoordEnd_OF = config->GetEA_IntLimit(1);
@@ -903,7 +904,9 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
             /*--- Compute the Azimuthal angle (resolution of degress in the Azimuthal angle)---*/
 
             su2double AngleDouble; short AngleInt;
-            AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+            if (ZcoordRot == 0.0) AngleDouble = 90.0;
+            else if (ZcoordRot < 0.0) AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+            else AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER+180.0);
 
             /*--- Fix an azimuthal line due to misalignments of the near-field ---*/
 
@@ -916,7 +919,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
             else AzimuthalAngle[nVertex_NearField] = 180 + AngleInt;
           }
 
-          if (AzimuthalAngle[nVertex_NearField] <= 60) {
+          if (AzimuthalAngle[nVertex_NearField] <= 180) {
             Pressure[nVertex_NearField] = solver->GetNodes()->GetPressure(iPoint);
             FaceArea[nVertex_NearField] = fabs(Face_Normal[nDim-1]);
             nVertex_NearField ++;
@@ -949,7 +952,8 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         Coord = geometry->nodes->GetCoord(iPoint);
 
         if (geometry->nodes->GetDomain(iPoint))
-          if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0))
+          //if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0))
+          if (Face_Normal[nDim-2] < 0.0)
             nLocalVertex_NearField ++;
       }
 
@@ -1010,7 +1014,8 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         Coord = geometry->nodes->GetCoord(iPoint);
 
         if (geometry->nodes->GetDomain(iPoint))
-          if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0)) {
+          //if ((Face_Normal[nDim-1] > 0.0) && (Coord[nDim-1] < 0.0)) {
+          if ((Face_Normal[nDim-2] < 0.0) ) {
             Buffer_Send_IdPoint[nLocalVertex_NearField] = iPoint;
             Buffer_Send_Xcoord[nLocalVertex_NearField] = geometry->nodes->GetCoord(iPoint, 0);
             Buffer_Send_Ycoord[nLocalVertex_NearField] = geometry->nodes->GetCoord(iPoint, 1);
@@ -1072,7 +1077,11 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
           /*--- Compute the Azimuthal angle ---*/
 
           su2double AngleDouble; short AngleInt;
-          AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+          if (ZcoordRot == 0.0) AngleDouble = 90.0;
+          else if (ZcoordRot < 0.0) AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+          else AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER+180.0);
+//          cout << endl << AngleDouble << ", " << YcoordRot << ", " << ZcoordRot;
+          /*--- This seems to be used 2019/10/22 ---*/
 
           /*--- Fix an azimuthal line due to misalignments of the near-field ---*/
 
@@ -1087,7 +1096,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
           else AzimuthalAngle[nVertex_NearField] = 180 + AngleInt;
         }
 
-        if (AzimuthalAngle[nVertex_NearField] <= 60) {
+        if (AzimuthalAngle[nVertex_NearField] <= 180) {
           IdPoint[nVertex_NearField] = Buffer_Receive_IdPoint[iProcessor*MaxLocalVertex_NearField+iVertex];
           Pressure[nVertex_NearField] = Buffer_Receive_Pressure[iProcessor*MaxLocalVertex_NearField+iVertex];
           FaceArea[nVertex_NearField] = Buffer_Receive_FaceArea[iProcessor*MaxLocalVertex_NearField+iVertex];
@@ -1175,11 +1184,110 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
     unsigned short nVertex = Xcoord_PhiAngle[0].size();
     for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
       unsigned short nVertex_aux = Xcoord_PhiAngle[iPhiAngle].size();
-      if (nVertex_aux != nVertex) cout <<"Be careful!!! one azimuth list is shorter than the other"<< endl;
+      if (nVertex_aux != nVertex) cout <<"Be careful!!! one azimuth list is shorter than the other "<< nVertex << ", " << nVertex_aux <<", " << PhiAngleList[iPhiAngle] << endl;
       nVertex = min(nVertex, nVertex_aux);
     }
 
+    /*--- Apply multipole analysis to nearfield pressure distribution ---*/
+    if (config->GetNearfieldMultipole()) {
+      
+      /* Write */
+      NearFieldMultipoleOut_file.precision(15);
+      NearFieldMultipoleOut_file.open("NearfieldMultipoleOut.dat", ios::out);
+      NearFieldMultipoleOut_file << "TITLE = \"Nearfield pressure at each azimuthal angle\"" << "\n";
+      
+      if (config->GetSystemMeasurements() == US)
+        NearFieldMultipoleOut_file << "VARIABLES = \"Height (in) at r="<< R_Plane*12.0 << " in. (cyl. coord. system)\"";
+      else
+        NearFieldMultipoleOut_file << "VARIABLES = \"Height (m) at r="<< R_Plane << " m. (cylindrical coordinate system)\"";
+      
+      for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+        if (config->GetSystemMeasurements() == US)
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (?), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+        else
+          NearFieldMultipoleOut_file << ", \"Nearfield pressure (Pa), <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+      }
+      
+      NearFieldMultipoleOut_file << "\n";
+      for (iVertex = 0; iVertex < Pressure_PhiAngle[0].size(); iVertex++) {
+        
+        su2double XcoordRot = Xcoord_PhiAngle[0][iVertex]*cos(AoA) - Zcoord_PhiAngle[0][iVertex]*sin(AoA);
+        su2double XcoordRot_init = Xcoord_PhiAngle[0][0]*cos(AoA) - Zcoord_PhiAngle[0][0]*sin(AoA);
+        
+        if (config->GetSystemMeasurements() == US)
+          NearFieldMultipoleOut_file << scientific << (XcoordRot - XcoordRot_init) * 12.0;
+        else
+          NearFieldMultipoleOut_file << scientific << (XcoordRot - XcoordRot_init);
+        
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+          NearFieldMultipoleOut_file << scientific << ", " << Pressure_PhiAngle[iPhiAngle][iVertex]-Pressure_Inf;
+        }
+        
+        NearFieldMultipoleOut_file << "\n";
+        
+      }
+      NearFieldMultipoleOut_file.close();
+
+      /* Run multipole analysis */
+      if (((config->GetInnerIter()%30)==0) || (config->GetDiscrete_Adjoint())) system("multipole.sh");
+
+      /* Read */
+      vector<vector<su2double> > Pressure_PhiAngle_Trans;
+      NearFieldMultipoleIn_file.open("NearfieldMultipoleIn.dat", ios::in);
+      //TargetEA_file.open("TargetEA.dat", ios::in);
+    
+      if (NearFieldMultipoleIn_file.fail()) {
+        /*--- Set the table to 0 ---*/
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
+          for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
+            Pressure_PhiAngle[iPhiAngle][iVertex] = 0.0;
+      }
+      else {
+        
+        /*--- skip header lines ---*/
+        
+        string line;
+        getline(NearFieldMultipoleIn_file, line);
+        getline(NearFieldMultipoleIn_file, line);
+        
+        while (NearFieldMultipoleIn_file) {
+          
+          string line;
+          getline(NearFieldMultipoleIn_file, line);
+          istringstream is(line);
+          vector<su2double> row;
+          unsigned short iter = 0;
+          
+          while (is.good()) {
+            string token;
+            getline(is, token,',');
+            
+            istringstream js(token);
+            
+            su2double data;
+            js >> data;
+            
+            /*--- The first element in the table is the coordinate (in or m)---*/
+            
+            if (iter != 0) row.push_back(data);
+            iter++;
+            
+          }
+          Pressure_PhiAngle_Trans.push_back(row);
+        }
+
+        for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
+          for (iVertex = 0; iVertex < Pressure_PhiAngle[iPhiAngle].size(); iVertex++)
+            SU2_TYPE::SetValue(Pressure_PhiAngle.at(iPhiAngle).at(iVertex),SU2_TYPE::GetValue(Pressure_PhiAngle_Trans.at(iVertex).at(iPhiAngle)+Pressure_Inf));
+            //SU2_TYPE::SetValue(Pressure_PhiAngle.at(iPhiAngle).at(iVertex),SU2_TYPE::GetValue(Pressure_PhiAngletmp.at(iPhiAngle).at(iVertex)));
+            
+      }
+    }
+
+
     /*--- Compute equivalent area distribution at each azimuth angle ---*/
+    string nearVar;
+    nearVar=config->GetNearfieldVariable();
 
     for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
       EquivArea_PhiAngle[iPhiAngle][0] = 0.0;
@@ -1188,17 +1296,23 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
 
         Coord_i = Xcoord_PhiAngle[iPhiAngle][iVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][iVertex]*sin(AoA);
 
-        for (jVertex = 0; jVertex < iVertex-1; jVertex++) {
+        if (strcmp(nearVar.c_str(),"EA")==0){
+          for (jVertex = 0; jVertex < iVertex-1; jVertex++) {
 
-          Coord_j = Xcoord_PhiAngle[iPhiAngle][jVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex]*sin(AoA);
-          jp1Coord = Xcoord_PhiAngle[iPhiAngle][jVertex+1]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex+1]*sin(AoA);
+            Coord_j = Xcoord_PhiAngle[iPhiAngle][jVertex]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex]*sin(AoA);
+            jp1Coord = Xcoord_PhiAngle[iPhiAngle][jVertex+1]*cos(AoA) - Zcoord_PhiAngle[iPhiAngle][jVertex+1]*sin(AoA);
 
-          jFunction = factor*(Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf)*sqrt(Coord_i-Coord_j);
-          jp1Function = factor*(Pressure_PhiAngle[iPhiAngle][jVertex+1] - Pressure_Inf)*sqrt(Coord_i-jp1Coord);
+            jFunction = factor*(Pressure_PhiAngle[iPhiAngle][jVertex] - Pressure_Inf)*sqrt(Coord_i-Coord_j);
+            jp1Function = factor*(Pressure_PhiAngle[iPhiAngle][jVertex+1] - Pressure_Inf)*sqrt(Coord_i-jp1Coord);
 
-          DeltaX = (jp1Coord-Coord_j);
-          MeanFuntion = 0.5*(jp1Function + jFunction);
-          EquivArea_PhiAngle[iPhiAngle][iVertex] += DeltaX * MeanFuntion;
+            DeltaX = (jp1Coord-Coord_j);
+            MeanFuntion = 0.5*(jp1Function + jFunction);
+            EquivArea_PhiAngle[iPhiAngle][iVertex] += DeltaX * MeanFuntion;
+          }
+        }
+        else if(strcmp(nearVar.c_str(),"CP")==0){
+          EquivArea_PhiAngle[iPhiAngle][iVertex] = (Pressure_PhiAngle[iPhiAngle][iVertex] - Pressure_Inf) / Pressure_Inf; 
+            
         }
       }
     }
@@ -1304,6 +1418,8 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
     su2double PhiFactor = 1.0/su2double(PhiAngleList.size());
 
     /*--- Evaluate the objective function ---*/
+    su2double AzimuthalWeightCutoffangle = config->GetAzimuthalWeightCutoffangle();
+    su2double AzimuthalWeightFrac = config->GetAzimuthalWeightFrac();
 
     InverseDesign = 0;
     for (iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++)
@@ -1312,6 +1428,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         Coord_i = Xcoord_PhiAngle[iPhiAngle][iVertex];
 
         su2double Difference = EquivArea_PhiAngle[iPhiAngle][iVertex]-TargetArea_PhiAngle[iPhiAngle][iVertex];
+        if (PhiAngleList[iPhiAngle] > AzimuthalWeightCutoffangle) Difference = Difference * AzimuthalWeightFrac;
         su2double percentage = fabs(Difference)*100/fabs(TargetArea_PhiAngle[iPhiAngle][iVertex]);
 
         if ((percentage < 0.1) || (Coord_i < XCoordBegin_OF) || (Coord_i > XCoordEnd_OF)) Difference = 0.0;
@@ -1330,6 +1447,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
           Weight_PhiAngle[iPhiAngle][iVertex] = 1.0;
 
           su2double Difference = EquivArea_PhiAngle[iPhiAngle][jVertex]-TargetArea_PhiAngle[iPhiAngle][jVertex];
+          if (PhiAngleList[iPhiAngle] > AzimuthalWeightCutoffangle) Difference = Difference * AzimuthalWeightFrac;
           su2double percentage = fabs(Difference)*100/fabs(TargetArea_PhiAngle[iPhiAngle][jVertex]);
 
           if ((percentage < 0.1) || (Coord_j < XCoordBegin_OF) || (Coord_j > XCoordEnd_OF)) Difference = 0.0;

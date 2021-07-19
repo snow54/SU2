@@ -155,6 +155,10 @@ private:
   unsigned short Dynamic_Analysis;   /*!< \brief Static or dynamic structural analysis. */
   unsigned short nStartUpIter;       /*!< \brief Start up iterations using the fine grid. */
   su2double FixAzimuthalLine;        /*!< \brief Fix an azimuthal line due to misalignments of the nearfield. */
+  su2double AzimuthalWeightCutoffangle;
+  su2double AzimuthalWeightFrac;
+  string NearfieldVariable;
+  bool NearfieldMultipole;
   su2double **DV_Value;              /*!< \brief Previous value of the design variable. */
   su2double Venkat_LimiterCoeff;     /*!< \brief Limiter coefficient */
   unsigned long LimiterIter;         /*!< \brief Freeze the value of the limiter after a number of iterations */
@@ -6104,6 +6108,21 @@ public:
    * \return Azimuthal line to fix due to a misalignments of the nearfield.
    */
   su2double GetFixAzimuthalLine(void) const { return FixAzimuthalLine; }
+  /*!
+   * \brief AzimuthalWeightFrac will be multiplied to equivalent area difference above this angle.
+   * \return TBD.
+   */
+  su2double GetAzimuthalWeightCutoffangle(void) const { return AzimuthalWeightCutoffangle; }
+
+  /*!
+   * \brief Fraction that will be multiplied to equivalent area difference.
+   * \return TBD.
+   */
+  su2double GetAzimuthalWeightFrac(void) const { return AzimuthalWeightFrac; }
+  
+  string GetNearfieldVariable(void) const { return NearfieldVariable; }
+
+  bool GetNearfieldMultipole(void) const { return NearfieldMultipole; }
 
   /*!
    * \brief Value of the weight of the CD, CL, CM optimization.
