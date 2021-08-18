@@ -1081,7 +1081,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
       NearFieldMultipoleOut_file.close();
 
       /* Run multipole analysis */
-      if (((config->GetInnerIter()%400)==0) || (config->GetDiscrete_Adjoint())) system("multipole.sh");
+      if (((config->GetInnerIter()%config->GetNearfieldMultipoleInterval())==0) || (config->GetDiscrete_Adjoint())) system("multipole.sh");
 
       /* Read */
       vector<vector<su2double> > Pressure_PhiAngle_Trans;

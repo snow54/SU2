@@ -159,6 +159,7 @@ private:
   su2double AzimuthalWeightFrac;
   string NearfieldVariable;
   bool NearfieldMultipole;
+  unsigned short NearfieldMultipoleInterval;
   su2double **DV_Value;              /*!< \brief Previous value of the design variable. */
   su2double Venkat_LimiterCoeff;     /*!< \brief Limiter coefficient */
   unsigned long LimiterIter;         /*!< \brief Freeze the value of the limiter after a number of iterations */
@@ -6109,6 +6110,12 @@ public:
   string GetNearfieldVariable(void) const { return NearfieldVariable; }
 
   bool GetNearfieldMultipole(void) const { return NearfieldMultipole; }
+
+  /*!
+   * \brief Get the number of interval for multipole calculation.
+   * \return Number of interval for multipole calculation.
+   */
+  unsigned short GetNearfieldMultipoleInterval(void) const { return NearfieldMultipoleInterval; }
 
   /*!
    * \brief Value of the weight of the CD, CL, CM optimization.

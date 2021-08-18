@@ -1926,8 +1926,10 @@ void CConfig::SetConfig_Options() {
   addDoubleOption("AZIMUTHAL_WEIGHT_FRAC", AzimuthalWeightFrac, 1.0);
   /* DESCRIPTION: Variable used for nearfield.  EA (Equivalent area) or CP (Pressure) */
   addStringOption("NEARFIELD_VARIABLE", NearfieldVariable, string("EA"));
-  /* DESCRIPTION: Use an inconsistent (primal/dual) discrete adjoint formulation */
+  /* DESCRIPTION: Multipole calculation for nearfield pressure distribution */
   addBoolOption("NEARFIELD_MULTIPOLE", NearfieldMultipole, false);
+  /* DESCRIPTION: Multipole calculation interval for nearfield pressure distribution */
+  addUnsignedShortOption("NEARFIELD_MULTIPOLE_INTERVAL", NearfieldMultipoleInterval, 1);
   /*!\brief SENS_REMOVE_SHARP
    * \n DESCRIPTION: Remove sharp edges from the sensitivity evaluation  \n Format: SENS_REMOVE_SHARP = YES \n DEFAULT: NO \ingroup Config*/
   addBoolOption("SENS_REMOVE_SHARP", Sens_Remove_Sharp, false);
