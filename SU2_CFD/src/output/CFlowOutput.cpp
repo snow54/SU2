@@ -944,8 +944,10 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
 
           /*--- Compute the Azimuthal angle ---*/
 
-
-          su2double AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+          su2double AngleDouble;
+          if (ZcoordRot == 0.0) AngleDouble = 90.0;
+          else if (ZcoordRot < 0.0) AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER);
+          else AngleDouble = fabs(atan(-YcoordRot/ZcoordRot)*180.0/PI_NUMBER+180.0);
 
           /*--- Fix an azimuthal line due to misalignments of the near-field ---*/
 
