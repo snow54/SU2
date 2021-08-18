@@ -2,7 +2,7 @@
  * \file CNEMOEulerSolver.cpp
  * \brief Headers of the CNEMOEulerSolver class
  * \author S. R. Copeland, F. Palacios, W. Maier, C. Garbacz
- * \version 7.1.1 "Blackbird"
+ * \version 7.2.0 "Blackbird"
  *
  * SU2 Project Website: https://su2code.github.io
  *
@@ -1286,13 +1286,18 @@ void CNEMOEulerSolver::SetNondimensionalization(CConfig *config, unsigned short 
     if (viscous) {
 
       switch(config->GetKind_TransCoeffModel()){
-      case WILKE:
+      case TRANSCOEFFMODEL::WILKE:
         ModelTable << "Wilke-Blottner-Eucken";
         NonDimTable.PrintFooter();
         break;
 
-      case GUPTAYOS:
+      case TRANSCOEFFMODEL::GUPTAYOS:
         ModelTable << "Gupta-Yos";
+        NonDimTable.PrintFooter();
+        break;
+
+      case TRANSCOEFFMODEL::CHAPMANN_ENSKOG:
+        ModelTable << "CHAPMANN-ENSKOG_LDLT";
         NonDimTable.PrintFooter();
         break;
 
