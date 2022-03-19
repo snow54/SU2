@@ -2,14 +2,14 @@
  * \file CPhysicalGeometry.cpp
  * \brief Implementation of the physical geometry class.
  * \author F. Palacios, T. Economon
- * \version 7.2.0 "Blackbird"
+ * \version 7.3.0 "Blackbird"
  *
  * SU2 Project Website: https://su2code.github.io
  *
  * The SU2 Project is maintained by the SU2 Foundation
  * (http://su2foundation.org)
  *
- * Copyright 2012-2021, SU2 Contributors (cf. AUTHORS.md)
+ * Copyright 2012-2022, SU2 Contributors (cf. AUTHORS.md)
  *
  * SU2 is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -180,6 +180,11 @@ CPhysicalGeometry::CPhysicalGeometry(CConfig *config, unsigned short val_iZone, 
 
   }
 
+  /*--- If the gradient smoothing solver is active, allocate space for the sensitivity and initialize. ---*/
+  if (config->GetSmoothGradient()) {
+    Sensitivity.resize(nPoint,nDim) = su2double(0.0);
+  }
+
 }
 
 CPhysicalGeometry::CPhysicalGeometry(CGeometry *geometry,
@@ -268,6 +273,11 @@ CPhysicalGeometry::CPhysicalGeometry(CGeometry *geometry,
   LoadPoints(config, geometry);
   LoadVolumeElements(config, geometry);
   LoadSurfaceElements(config, geometry);
+
+  /*--- If the gradient smoothing solver is active, allocate space for the sensitivity and initialize. ---*/
+  if (config->GetSmoothGradient()) {
+    Sensitivity.resize(nPoint,nDim) = su2double(0.0);
+  }
 
   /*--- Free memory associated with the partitioning of points and elems. ---*/
 
@@ -2129,7 +2139,6 @@ void CPhysicalGeometry::LoadPoints(CConfig *config, CGeometry *geometry) {
 
   nPoint       = nLocal_Point;
   nPointDomain = nLocal_PointDomain;
-  nPointNode   = nPoint;
 
   nodes = new CPoint(nPoint, nDim, MESH_0, config);
 
@@ -2309,7 +2318,7 @@ void CPhysicalGeometry::LoadVolumeElements(CConfig *config, CGeometry *geometry)
 
     elem[jElem] = new CTriangle(Local_Nodes[0],
                                 Local_Nodes[1],
-                                Local_Nodes[2], 2);
+                                Local_Nodes[2]);
 
     elem[jElem]->SetGlobalIndex(kElem);
 
@@ -2342,7 +2351,7 @@ void CPhysicalGeometry::LoadVolumeElements(CConfig *config, CGeometry *geometry)
     elem[jElem] = new CQuadrilateral(Local_Nodes[0],
                                      Local_Nodes[1],
                                      Local_Nodes[2],
-                                     Local_Nodes[3], 2);
+                                     Local_Nodes[3]);
 
     elem[jElem]->SetGlobalIndex(kElem);
 
@@ -2724,7 +2733,7 @@ void CPhysicalGeometry::LoadSurfaceElements(CConfig *config, CGeometry *geometry
       /*--- Create the geometry object for this element. ---*/
 
       bound[iMarker][nElemBound_Local[iMarker]] = new CLine(Local_Nodes[0],
-                                                            Local_Nodes[1], 2);
+                                                            Local_Nodes[1]);
 
       /*--- Increment our counters for this marker and element type. ---*/
 
@@ -2757,7 +2766,7 @@ void CPhysicalGeometry::LoadSurfaceElements(CConfig *config, CGeometry *geometry
 
       bound[iMarker][nElemBound_Local[iMarker]] = new CTriangle(Local_Nodes[0],
                                                                 Local_Nodes[1],
-                                                                Local_Nodes[2], 3);
+                                                                Local_Nodes[2]);
 
       /*--- Increment our counters for this marker and element type. ---*/
 
@@ -2791,7 +2800,7 @@ void CPhysicalGeometry::LoadSurfaceElements(CConfig *config, CGeometry *geometry
       bound[iMarker][nElemBound_Local[iMarker]] = new CQuadrilateral(Local_Nodes[0],
                                                                      Local_Nodes[1],
                                                                      Local_Nodes[2],
-                                                                     Local_Nodes[3], 3);
+                                                                     Local_Nodes[3]);
 
       /*--- Increment our counters for this marker and element type. ---*/
 
@@ -3328,7 +3337,7 @@ void CPhysicalGeometry::SetSendReceive(const CConfig *config) {
     if (SendDomainLocal[iDomain].size() != 0) {
       for (iVertex = 0; iVertex < GetnElem_Bound(iMarkerSend); iVertex++) {
         LocalNode = SendDomainLocal[iDomain][iVertex];
-        bound[iMarkerSend][iVertex] = new CVertexMPI(LocalNode, nDim);
+        bound[iMarkerSend][iVertex] = new CVertexMPI(LocalNode);
         bound[iMarkerSend][iVertex]->SetRotation_Type(SendTransfLocal[iDomain][iVertex]);
       }
       Marker_All_SendRecv[iMarkerSend] = iDomain+1;
@@ -3341,7 +3350,7 @@ void CPhysicalGeometry::SetSendReceive(const CConfig *config) {
     if (ReceivedDomainLocal[iDomain].size() != 0) {
       for (iVertex = 0; iVertex < GetnElem_Bound(iMarkerReceive); iVertex++) {
         LocalNode = ReceivedDomainLocal[iDomain][iVertex];
-        bound[iMarkerReceive][iVertex] = new CVertexMPI(LocalNode, nDim);
+        bound[iMarkerReceive][iVertex] = new CVertexMPI(LocalNode);
         bound[iMarkerReceive][iVertex]->SetRotation_Type(ReceivedTransfLocal[iDomain][iVertex]);
       }
       Marker_All_SendRecv[iMarkerReceive] = -(iDomain+1);
@@ -3458,17 +3467,17 @@ void CPhysicalGeometry::SetBoundaries(CConfig *config) {
       for (iElem_Bound = 0; iElem_Bound < nElem_Bound[iMarker]; iElem_Bound++) {
         if (bound[iMarker][iElem_Bound]->GetVTK_Type() == LINE)
           bound_Copy[iMarker][iElem_Bound] = new CLine(bound[iMarker][iElem_Bound]->GetNode(0),
-                                                       bound[iMarker][iElem_Bound]->GetNode(1), 2);
+                                                       bound[iMarker][iElem_Bound]->GetNode(1));
         if (bound[iMarker][iElem_Bound]->GetVTK_Type() == TRIANGLE)
 
           bound_Copy[iMarker][iElem_Bound] = new CTriangle(bound[iMarker][iElem_Bound]->GetNode(0),
                                                            bound[iMarker][iElem_Bound]->GetNode(1),
-                                                           bound[iMarker][iElem_Bound]->GetNode(2), 3);
+                                                           bound[iMarker][iElem_Bound]->GetNode(2));
         if (bound[iMarker][iElem_Bound]->GetVTK_Type() == QUADRILATERAL)
           bound_Copy[iMarker][iElem_Bound] = new CQuadrilateral(bound[iMarker][iElem_Bound]->GetNode(0),
                                                             bound[iMarker][iElem_Bound]->GetNode(1),
                                                             bound[iMarker][iElem_Bound]->GetNode(2),
-                                                            bound[iMarker][iElem_Bound]->GetNode(3), 3);
+                                                            bound[iMarker][iElem_Bound]->GetNode(3));
       }
     }
   }
@@ -3497,7 +3506,7 @@ void CPhysicalGeometry::SetBoundaries(CConfig *config) {
       Marker_All_SendRecv_Copy[iMarker_] = Marker_All_SendRecv[iMarker];
 
       for (iElem_Bound = 0; iElem_Bound < nElem_Bound[iMarker]; iElem_Bound++) {
-        bound_Copy[iMarker_][iVertex_] = new CVertexMPI(bound[iMarker][iElem_Bound]->GetNode(0), nDim);
+        bound_Copy[iMarker_][iVertex_] = new CVertexMPI(bound[iMarker][iElem_Bound]->GetNode(0));
         bound_Copy[iMarker_][iVertex_]->SetRotation_Type(bound[iMarker][iElem_Bound]->GetRotation_Type());
         iVertex_++;
       }
@@ -3526,7 +3535,7 @@ void CPhysicalGeometry::SetBoundaries(CConfig *config) {
       Marker_All_SendRecv_Copy[iMarker_] = Marker_All_SendRecv[iMarker];
 
       for (iElem_Bound = 0; iElem_Bound < nElem_Bound[iMarker]; iElem_Bound++) {
-        bound_Copy[iMarker_][iVertex_] = new CVertexMPI(bound[iMarker][iElem_Bound]->GetNode(0), nDim);
+        bound_Copy[iMarker_][iVertex_] = new CVertexMPI(bound[iMarker][iElem_Bound]->GetNode(0));
         bound_Copy[iMarker_][iVertex_]->SetRotation_Type(bound[iMarker][iElem_Bound]->GetRotation_Type());
         iVertex_++;
       }
@@ -3599,6 +3608,8 @@ void CPhysicalGeometry::SetBoundaries(CConfig *config) {
       config->SetMarker_All_Turbomachinery(iMarker, config->GetMarker_CfgFile_Turbomachinery(Marker_Tag));
       config->SetMarker_All_TurbomachineryFlag(iMarker, config->GetMarker_CfgFile_TurbomachineryFlag(Marker_Tag));
       config->SetMarker_All_MixingPlaneInterface(iMarker, config->GetMarker_CfgFile_MixingPlaneInterface(Marker_Tag));
+      config->SetMarker_All_SobolevBC(iMarker, config->GetMarker_CfgFile_SobolevBC(Marker_Tag));
+
     }
 
     /*--- Send-Receive boundaries definition ---*/
@@ -3622,6 +3633,7 @@ void CPhysicalGeometry::SetBoundaries(CConfig *config) {
       config->SetMarker_All_Turbomachinery(iMarker, NO);
       config->SetMarker_All_TurbomachineryFlag(iMarker, NO);
       config->SetMarker_All_MixingPlaneInterface(iMarker, NO);
+      config->SetMarker_All_SobolevBC(iMarker, NO);
 
       for (iElem_Bound = 0; iElem_Bound < nElem_Bound[iMarker]; iElem_Bound++) {
         if (config->GetMarker_All_SendRecv(iMarker) < 0)
@@ -3763,7 +3775,6 @@ void CPhysicalGeometry::LoadLinearlyPartitionedPoints(CConfig        *config,
 
   /*--- Initialize point counts and the grid node data structure. ---*/
 
-  nPointNode = nPoint;
   nodes = new CPoint(nPoint, nDim);
 
   /*--- Loop over the CGNS grid nodes and load into the SU2 data
@@ -3824,7 +3835,7 @@ void CPhysicalGeometry::LoadLinearlyPartitionedVolumeElements(CConfig        *co
       case TRIANGLE:
         elem[iElem] = new CTriangle(connectivity[0],
                                     connectivity[1],
-                                    connectivity[2], nDim);
+                                    connectivity[2]);
         nelem_triangle++;
         break;
 
@@ -3832,7 +3843,7 @@ void CPhysicalGeometry::LoadLinearlyPartitionedVolumeElements(CConfig        *co
         elem[iElem] = new CQuadrilateral(connectivity[0],
                                          connectivity[1],
                                          connectivity[2],
-                                         connectivity[3], nDim);
+                                         connectivity[3]);
         nelem_quad++;
         break;
 
@@ -3985,18 +3996,18 @@ void CPhysicalGeometry::LoadUnpartitionedSurfaceElements(CConfig        *config,
         switch(vtk_type) {
           case LINE:
             bound[iMarker][iElem] = new CLine(connectivity[0],
-                                              connectivity[1],2);
+                                              connectivity[1]);
             iElem++; nelem_edge_bound++; break;
           case TRIANGLE:
             bound[iMarker][iElem] = new CTriangle(connectivity[0],
                                                   connectivity[1],
-                                                  connectivity[2],3);
+                                                  connectivity[2]);
             iElem++; nelem_triangle_bound++; break;
           case QUADRILATERAL:
             bound[iMarker][iElem] = new CQuadrilateral(connectivity[0],
                                                        connectivity[1],
                                                        connectivity[2],
-                                                       connectivity[3],3);
+                                                       connectivity[3]);
             iElem++; nelem_quad_bound++; break;
         }
 
@@ -4025,6 +4036,7 @@ void CPhysicalGeometry::LoadUnpartitionedSurfaceElements(CConfig        *config,
       config->SetMarker_All_Turbomachinery(iMarker, config->GetMarker_CfgFile_Turbomachinery(Marker_Tag));
       config->SetMarker_All_TurbomachineryFlag(iMarker, config->GetMarker_CfgFile_TurbomachineryFlag(Marker_Tag));
       config->SetMarker_All_MixingPlaneInterface(iMarker, config->GetMarker_CfgFile_MixingPlaneInterface(Marker_Tag));
+      config->SetMarker_All_SobolevBC(iMarker, config->GetMarker_CfgFile_SobolevBC(Marker_Tag));
 
     }
   }
@@ -4719,7 +4731,7 @@ void CPhysicalGeometry::SetPoint_Connectivity() {
 
       jElem = nodes->GetElem(iPoint, iElem);
 
-      /*--- If we find the point iPoint in the surronding element ---*/
+      /*--- If we find the point iPoint in the surrounding element ---*/
 
       for (iNode = 0; iNode < elem[jElem]->GetnNodes(); iNode++) {
 
@@ -4754,78 +4766,80 @@ void CPhysicalGeometry::SetPoint_Connectivity() {
 
 void CPhysicalGeometry::SetRCM_Ordering(CConfig *config) {
 
-  queue<unsigned long> Queue;
-  vector<char> inQueue(nPoint, false);
+  /*--- The result is the RCM ordering, during the process it is also used as
+   * the queue of new points considered by the algorithm. This is possible
+   * because points move from the front of the queue to the back of the result,
+   * which is equivalent to incrementing an integer marking the end of the
+   * result and the start of the queue. ---*/
+  vector<char> InQueue(nPoint, false);
   vector<unsigned long> AuxQueue, Result;
   Result.reserve(nPoint);
+  unsigned long QueueStart = 0;
 
-  /*--- Select the node with the lowest degree in the grid. ---*/
-
-  unsigned long AddPoint = 0;
-  auto MinDegree = nodes->GetnPoint(AddPoint);
-  for (auto iPoint = 1ul; iPoint < nPointDomain; iPoint++) {
-    auto Degree = nodes->GetnPoint(iPoint);
-    if (Degree < MinDegree) { MinDegree = Degree; AddPoint = iPoint; }
+  /*--- Exclude halo nodes from the ordering process. ---*/
+  for (auto iPoint = nPointDomain; iPoint < nPoint; iPoint++) {
+    InQueue[iPoint] = true;
   }
 
-  /*--- Add the node in the first free position. ---*/
+  /*--- Repeat as many times as necessary to handle disconnected graphs. ---*/
+  while (Result.size() < nPointDomain) {
 
-  Result.push_back(AddPoint); inQueue[AddPoint] = true;
-
-  /*--- Loop until reorganize all the nodes ---*/
-
-  do {
-
-    /*--- Add to the queue all the nodes adjacent in the increasing
-     order of their degree, checking if the element is already
-     in the Queue. ---*/
-
-    AuxQueue.clear();
-    for (auto iNode = 0u; iNode < nodes->GetnPoint(AddPoint); iNode++) {
-      auto AdjPoint = nodes->GetPoint(AddPoint, iNode);
-      if ((!inQueue[AdjPoint]) && (AdjPoint < nPointDomain)) {
-        AuxQueue.push_back(AdjPoint);
+    /*--- Select the node with the lowest degree in the grid. ---*/
+    auto AddPoint = nPoint;
+    auto MinDegree = std::numeric_limits<unsigned short>::max();
+    for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
+      auto Degree = nodes->GetnPoint(iPoint);
+      if (!InQueue[iPoint] && Degree < MinDegree) {
+        MinDegree = Degree;
+        AddPoint = iPoint;
       }
     }
+    if (AddPoint == nPoint) {
+      SU2_MPI::Error("RCM ordering failed", CURRENT_FUNCTION);
+    }
 
-    if (!AuxQueue.empty()) {
+    /*--- Seed the queue with the minimum degree node. ---*/
+    Result.push_back(AddPoint);
+    InQueue[AddPoint] = true;
 
-      /*--- Sort the auxiliar queue based on the number of neighbors ---*/
+    /*--- Loop until reorganizing all nodes connected to AddPoint. This will
+     * also terminate early once the ordering + queue include all points. ---*/
+    while (QueueStart < Result.size() && Result.size() < nPointDomain) {
 
+      /*--- Move the start of the queue, equivalent to taking from the front of
+       * the queue and inserting at the end of the result. ---*/
+      AddPoint = Result[QueueStart];
+      ++QueueStart;
+
+      /*--- Add all adjacent nodes to the queue in increasing order of their
+       degree, checking if the element is already in the queue. ---*/
+      AuxQueue.clear();
+      for (auto iNode = 0u; iNode < nodes->GetnPoint(AddPoint); iNode++) {
+        const auto AdjPoint = nodes->GetPoint(AddPoint, iNode);
+        if (!InQueue[AdjPoint]) {
+          AuxQueue.push_back(AdjPoint);
+          InQueue[AdjPoint] = true;
+        }
+      }
+      if (AuxQueue.empty()) continue;
+
+      /*--- Sort the auxiliar queue based on the number of neighbors (degree). ---*/
       stable_sort(AuxQueue.begin(), AuxQueue.end(),
         [&](unsigned long iPoint, unsigned long jPoint) {
           return nodes->GetnPoint(iPoint) < nodes->GetnPoint(jPoint);
         }
       );
-
-      for (auto iPoint : AuxQueue) {
-        Queue.push(iPoint);
-        inQueue[iPoint] = true;
-      }
-
+      Result.insert(Result.end(), AuxQueue.begin(), AuxQueue.end());
     }
-
-    /*--- Extract the first node from the queue and add it in the first free
-     position. ---*/
-
-    if (!Queue.empty()) {
-      AddPoint = Queue.front();
-      Result.push_back(AddPoint);
-      Queue.pop();
-    }
-
-  } while (!Queue.empty());
-
-  /*--- Check that all the points have been added ---*/
-
-  for (auto iPoint = 0ul; iPoint < nPointDomain; iPoint++) {
-    if (inQueue[iPoint] == false) Result.push_back(iPoint);
   }
-
   reverse(Result.begin(), Result.end());
 
-  /*--- Add the MPI points ---*/
+  /*--- Check that all the points have been added ---*/
+  for (const auto status : InQueue) {
+    if (!status) SU2_MPI::Error("RCM ordering failed", CURRENT_FUNCTION);
+  }
 
+  /*--- Add the MPI points ---*/
   for (auto iPoint = nPointDomain; iPoint < nPoint; iPoint++) {
     Result.push_back(iPoint);
   }
@@ -4976,7 +4990,7 @@ void CPhysicalGeometry::SetBoundVolume(void) {
     }
 }
 
-void CPhysicalGeometry::SetVertex(CConfig *config) {
+void CPhysicalGeometry::SetVertex(const CConfig *config) {
   unsigned long  iPoint, iVertex, iElem;
   unsigned short iMarker, iNode;
 
@@ -6652,7 +6666,7 @@ void CPhysicalGeometry::SetMaxLength(CConfig* config) {
 
 }
 
-void CPhysicalGeometry::MatchActuator_Disk(CConfig *config) {
+void CPhysicalGeometry::MatchActuator_Disk(const CConfig *config) {
 
   su2double epsilon = 1e-1;
 
@@ -6855,7 +6869,7 @@ void CPhysicalGeometry::MatchActuator_Disk(CConfig *config) {
 
 }
 
-void CPhysicalGeometry::MatchPeriodic(CConfig        *config,
+void CPhysicalGeometry::MatchPeriodic(const CConfig *config,
                                       unsigned short val_periodic) {
 
   unsigned short iMarker, iDim, jMarker, pMarker = 0;
@@ -7388,7 +7402,7 @@ void CPhysicalGeometry::SetControlVolume(CConfig *config, unsigned short action)
     AD::SetPreaccIn(Coord, nNodes, nDim);
 
     /*--- Compute the element median CG coordinates ---*/
-    auto Coord_Elem_CG = elem[iElem]->SetCoord_CG(Coord);
+    auto Coord_Elem_CG = elem[iElem]->SetCoord_CG(nDim, Coord);
     AD::SetPreaccOut(Coord_Elem_CG, nDim);
 
     for (unsigned short iFace = 0; iFace < elem[iElem]->GetnFaces(); iFace++) {
@@ -7538,7 +7552,7 @@ void CPhysicalGeometry::SetBoundControlVolume(const CConfig *config, unsigned sh
       AD::SetPreaccIn(Coord, nNodes, nDim);
 
       /*--- Compute the element CG coordinates ---*/
-      auto Coord_Elem_CG = bound[iMarker][iElem]->SetCoord_CG(Coord);
+      auto Coord_Elem_CG = bound[iMarker][iElem]->SetCoord_CG(nDim, Coord);
       AD::SetPreaccOut(Coord_Elem_CG, nDim);
 
       /*--- Loop over all the nodes of the boundary element ---*/
@@ -8431,7 +8445,7 @@ void CPhysicalGeometry::ComputeMeshQualityStatistics(const CConfig *config) {
 
 }
 
-void CPhysicalGeometry::FindNormal_Neighbor(CConfig *config) {
+void CPhysicalGeometry::FindNormal_Neighbor(const CConfig *config) {
   su2double cos_max, scalar_prod, norm_vect, norm_Normal, cos_alpha, diff_coord, *Normal;
   unsigned long Point_Normal, jPoint;
   unsigned short iNeigh, iMarker, iDim;
@@ -9955,7 +9969,7 @@ void CPhysicalGeometry::Compute_Wing(CConfig *config, bool original_surface,
 
     /*--- Write an output file---*/
 
-    if (config->GetTabular_FileFormat() == TAB_CSV) {
+    if (config->GetTabular_FileFormat() == TAB_OUTPUT::TAB_CSV) {
       Wing_File.open("wing_description.csv", ios::out);
       if (config->GetSystemMeasurements() == US)
         Wing_File << "\"yCoord/SemiSpan\",\"Area (in^2)\",\"Max. Thickness (in)\",\"Chord (in)\",\"Leading Edge Radius (1/in)\",\"Max. Thickness/Chord\",\"Twist (deg)\",\"Curvature (1/in)\",\"Dihedral (deg)\",\"Leading Edge XLoc/SemiSpan\",\"Leading Edge ZLoc/SemiSpan\",\"Trailing Edge XLoc/SemiSpan\",\"Trailing Edge ZLoc/SemiSpan\"" << endl;
@@ -10047,7 +10061,7 @@ void CPhysicalGeometry::Compute_Wing(CConfig *config, bool original_surface,
 
     for (iPlane = 0; iPlane < nPlane; iPlane++) {
       if (Xcoord_Airfoil[iPlane].size() > 1) {
-        if (config->GetTabular_FileFormat() == TAB_CSV) {
+        if (config->GetTabular_FileFormat() == TAB_OUTPUT::TAB_CSV) {
           Wing_File  << Ycoord_Airfoil[iPlane][0]/SemiSpan <<", "<< Area[iPlane] <<", "<< MaxThickness[iPlane] <<", "<< Chord[iPlane] <<", "<< LERadius[iPlane] <<", "<< ToC[iPlane]
                      <<", "<< Twist[iPlane] <<", "<< Curvature[iPlane] <<", "<< Dihedral[iPlane]
                      <<", "<< LeadingEdge[iPlane][0]/SemiSpan <<", "<< LeadingEdge[iPlane][2]/SemiSpan
@@ -10250,7 +10264,7 @@ void CPhysicalGeometry::Compute_Fuselage(CConfig *config, bool original_surface,
 
     /*--- Write an output file---*/
 
-    if (config->GetTabular_FileFormat() == TAB_CSV) {
+    if (config->GetTabular_FileFormat() == TAB_OUTPUT::TAB_CSV) {
       Fuselage_File.open("fuselage_description.csv", ios::out);
       if (config->GetSystemMeasurements() == US)
         Fuselage_File << "\"x (in)\",\"Area (in^2)\",\"Length (in)\",\"Width (in)\",\"Waterline width (in)\",\"Height (in)\",\"Curvature (1/in)\",\"Generatrix Curve X (in)\",\"Generatrix Curve Y (in)\",\"Generatrix Curve Z (in)\",\"Axis Curve X (in)\",\"Axis Curve Y (in)\",\"Axis Curve Z (in)\"" << endl;
@@ -10333,7 +10347,7 @@ void CPhysicalGeometry::Compute_Fuselage(CConfig *config, bool original_surface,
 
     for (iPlane = 0; iPlane < nPlane; iPlane++) {
       if (Xcoord_Airfoil[iPlane].size() > 1) {
-        if (config->GetTabular_FileFormat() == TAB_CSV) {
+        if (config->GetTabular_FileFormat() == TAB_OUTPUT::TAB_CSV) {
           Fuselage_File  << -Ycoord_Airfoil[iPlane][0] <<", "<< Area[iPlane] <<", "<< Length[iPlane] <<", "<< Width[iPlane] <<", "<< WaterLineWidth[iPlane] <<", "<< Height[iPlane] <<", "<< Curvature[iPlane]
                      <<", "<< -LeadingEdge[iPlane][1] <<", "<< LeadingEdge[iPlane][0]  <<", "<< LeadingEdge[iPlane][2]
                      <<", "<< -TrailingEdge[iPlane][1] <<", "<< TrailingEdge[iPlane][0]  <<", "<< TrailingEdge[iPlane][2]  << endl;
@@ -10561,7 +10575,7 @@ void CPhysicalGeometry::Compute_Nacelle(CConfig *config, bool original_surface,
 
     /*--- Write an output file---*/
 
-    if (config->GetTabular_FileFormat() == TAB_CSV) {
+    if (config->GetTabular_FileFormat() == TAB_OUTPUT::TAB_CSV) {
       Nacelle_File.open("nacelle_description.csv", ios::out);
       if (config->GetSystemMeasurements() == US)
         Nacelle_File << "\"Theta (deg)\",\"Area (in^2)\",\"Max. Thickness (in)\",\"Chord (in)\",\"Leading Edge Radius (1/in)\",\"Max. Thickness/Chord\",\"Twist (deg)\",\"Leading Edge XLoc\",\"Leading Edge ZLoc\",\"Trailing Edge XLoc\",\"Trailing Edge ZLoc\"" << endl;
@@ -10623,7 +10637,7 @@ void CPhysicalGeometry::Compute_Nacelle(CConfig *config, bool original_surface,
       su2double theta_deg = atan2(Plane_Normal[iPlane][1], -Plane_Normal[iPlane][2])/PI_NUMBER*180 + 180;
 
       if (Xcoord_Airfoil[iPlane].size() > 1) {
-        if (config->GetTabular_FileFormat() == TAB_CSV) {
+        if (config->GetTabular_FileFormat() == TAB_OUTPUT::TAB_CSV) {
           Nacelle_File  << theta_deg <<", "<< Area[iPlane] <<", "<< MaxThickness[iPlane] <<", "<< Chord[iPlane] <<", "<< LERadius[iPlane] <<", "<< ToC[iPlane]
           <<", "<< Twist[iPlane] <<", "<< LeadingEdge[iPlane][0] <<", "<< LeadingEdge[iPlane][2]
           <<", "<< TrailingEdge[iPlane][0] <<", "<< TrailingEdge[iPlane][2] << endl;
