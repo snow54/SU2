@@ -1298,6 +1298,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
   unsigned long iPoint, auxPoint, auxDomain;
   ofstream NearFieldEA_file; ifstream TargetEA_file;
   ofstream NearFieldMultipoleOut_file; ifstream NearFieldMultipoleIn_file;
+  ofstream InvDesign_file;
 
   const su2double XCoordBegin_OF = config->GetEA_IntLimit(0);
   const su2double XCoordEnd_OF = config->GetEA_IntLimit(1);
@@ -1422,6 +1423,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
     vector<su2double> TargetArea(nVertex_NearField);
     vector<su2double> NearFieldWeight(nVertex_NearField);
     vector<su2double> Weight(nVertex_NearField);
+    vector<su2double> InvDesign(nVertex_NearField);
 
     nVertex_NearField = 0;
     for (int iProcessor = 0; iProcessor < size; iProcessor++) {
@@ -1495,6 +1497,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
     vector<vector<su2double> > TargetArea_PhiAngle(PhiAngleList.size());
     vector<vector<su2double> > NearFieldWeight_PhiAngle(PhiAngleList.size());
     vector<vector<su2double> > Weight_PhiAngle(PhiAngleList.size());
+    vector<vector<su2double> > InvDesign_PhiAngle(PhiAngleList.size());
 
     /*--- Distribute the values among the different PhiAngles ---*/
 
@@ -1512,6 +1515,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
           TargetArea_PhiAngle[iPhiAngle].push_back(TargetArea[iVertex]);
           NearFieldWeight_PhiAngle[iPhiAngle].push_back(NearFieldWeight[iVertex]);
           Weight_PhiAngle[iPhiAngle].push_back(Weight[iVertex]);
+          InvDesign_PhiAngle[iPhiAngle].push_back(InvDesign[iVertex]);
         }
 
     /*--- Order the arrays (x Coordinate, Pressure, Point, and Domain) ---*/
@@ -1783,7 +1787,47 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         if ((percentage < 0.1) || (Coord_i < XCoordBegin_OF) || (Coord_i > XCoordEnd_OF)) Difference = 0.0;
 
         InverseDesign += EAScaleFactor*PhiFactor*Weight_PhiAngle[iPhiAngle][iVertex]*Difference*Difference;
+        InvDesign_PhiAngle[iPhiAngle][iVertex] = EAScaleFactor*PhiFactor*Weight_PhiAngle[iPhiAngle][iVertex]*Difference*Difference;
       }
+
+    InvDesign_file.precision(config->GetOutput_Precision());
+
+    InvDesign_file.open("InvDesign.dat", ios::out);
+    InvDesign_file << "TITLE = \"InverseDesign evaluation at each azimuthal angle\"" << "\n";
+
+    if (config->GetSystemMeasurements() == US)
+      InvDesign_file << "VARIABLES = \"Height (in) at r="<< R_Plane*12.0 << " in. (cyl. coord. system)\"";
+    else
+      InvDesign_file << "VARIABLES = \"Height (m) at r="<< R_Plane << " m. (cylindrical coordinate system)\"";
+
+    for (unsigned long iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+      if (config->GetSystemMeasurements() == US)
+        InvDesign_file << ", \"InverseDesign, <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+      else
+        InvDesign_file << ", \"InverseDesign, <greek>F</greek>= " << PhiAngleList[iPhiAngle] << " deg.\"";
+    }
+
+    InvDesign_file << "\n";
+    for (unsigned long iVertex = 0; iVertex < InvDesign_PhiAngle[0].size(); iVertex++) {
+
+      su2double XcoordRot = Xcoord_PhiAngle[0][iVertex]*cos(AoA) - Zcoord_PhiAngle[0][iVertex]*sin(AoA);
+      su2double XcoordRot_init = Xcoord_PhiAngle[0][0]*cos(AoA) - Zcoord_PhiAngle[0][0]*sin(AoA);
+
+      if (config->GetSystemMeasurements() == US)
+        InvDesign_file << scientific << (XcoordRot - XcoordRot_init) * 12.0;
+      else
+        InvDesign_file << scientific << (XcoordRot - XcoordRot_init);
+
+      for (unsigned long iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
+        InvDesign_file << scientific << ", " << InvDesign_PhiAngle[iPhiAngle][iVertex];
+      }
+
+      InvDesign_file << "\n";
+
+    }
+    InvDesign_file.close();
+
+
 
     /*--- Evaluate the weight of the nearfield pressure (adjoint input) ---*/
 
