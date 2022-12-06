@@ -1770,7 +1770,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
 
     su2double PhiFactor = 1.0/su2double(PhiAngleList.size());
 
-    vector<su2double> x_weight;
+    vector<su2double> x_weight(EquivArea_PhiAngle[0].size());
 
     /*--- Evaluate the objective function ---*/
     su2double AzimuthalWeightCutoffangle = config->GetAzimuthalWeightCutoffangle();
@@ -1787,7 +1787,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         else if (iVertex == EquivArea_PhiAngle[iPhiAngle].size()-1) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
         else x_weight[iVertex]=2/(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
         
-        if ((Coord_i > XCoordBegin_OF)&&(Coord_i < XCoordEnd_OF)) x_weight[iVertex] *= (sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-XCoordBegin_OF)-sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex]-XCoordBegin_OF))/sqrt(XCoordEnd_OF-XCoordBegin_OF);
+        if ((Coord_i > XCoordBegin_OF)&&(Coord_i < XCoordEnd_OF)) x_weight[iVertex] *= (sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-XCoordBegin_OF)-sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex]-XCoordBegin_OF))*sqrt(XCoordEnd_OF-XCoordBegin_OF);
 
         su2double Difference = EquivArea_PhiAngle[iPhiAngle][iVertex]-TargetArea_PhiAngle[iPhiAngle][iVertex];
         if (PhiAngleList[iPhiAngle] > AzimuthalWeightCutoffangle) Difference = Difference * AzimuthalWeightFrac;
