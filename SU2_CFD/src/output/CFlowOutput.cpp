@@ -1783,9 +1783,9 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         Coord_i = Xcoord_PhiAngle[iPhiAngle][iVertex];
 
         /*--- Account for non-uniform x coordinates ---*/
-        if (iVertex == 0) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex]);
-        else if (iVertex == EquivArea_PhiAngle[iPhiAngle].size()-1) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
-        else x_weight[iVertex]=2/(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
+        if (iVertex == 0) x_weight[iVertex]=(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex]);
+        else if (iVertex == EquivArea_PhiAngle[iPhiAngle].size()-1) x_weight[iVertex]=(Xcoord_PhiAngle[iPhiAngle][iVertex]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
+        else x_weight[iVertex]=(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex-1])/2;
         
         if ((Coord_i > XCoordBegin_OF)&&(Coord_i < XCoordEnd_OF)) x_weight[iVertex] *= (sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-XCoordBegin_OF)-sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex]-XCoordBegin_OF))*sqrt(XCoordEnd_OF-XCoordBegin_OF);
 
@@ -1808,6 +1808,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
       InvDesign_file << "VARIABLES = \"Height (in) at r="<< R_Plane*12.0 << " in. (cyl. coord. system)\"";
     else
       InvDesign_file << "VARIABLES = \"Height (m) at r="<< R_Plane << " m. (cylindrical coordinate system)\"";
+    InvDesign_file << "weight";
 
     for (unsigned long iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
       if (config->GetSystemMeasurements() == US)
