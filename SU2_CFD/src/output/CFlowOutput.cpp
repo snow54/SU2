@@ -1784,7 +1784,7 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
 
         /*--- Account for non-uniform x coordinates ---*/
         if (iVertex == 0) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex]);
-        if else (iVertex == EquivArea_PhiAngle[iPhiAngle].size()-1) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
+        else if (iVertex == EquivArea_PhiAngle[iPhiAngle].size()-1) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
         else x_weight[iVertex]=2/(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
         
         if ((Coord_i > XCoordBegin_OF)&&(Coord_i < XCoordEnd_OF)) x_weight[iVertex] *= (sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-XCoordBegin_OF)-sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex]-XCoordBegin_OF))/sqrt(XCoordEnd_OF-XCoordBegin_OF);
