@@ -1770,6 +1770,8 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
 
     su2double PhiFactor = 1.0/su2double(PhiAngleList.size());
 
+    vector<su2double> x_weight;
+
     /*--- Evaluate the objective function ---*/
     su2double AzimuthalWeightCutoffangle = config->GetAzimuthalWeightCutoffangle();
     su2double AzimuthalWeightFrac = config->GetAzimuthalWeightFrac();
@@ -1780,14 +1782,21 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         Weight_PhiAngle[iPhiAngle][iVertex] = 1.0;
         Coord_i = Xcoord_PhiAngle[iPhiAngle][iVertex];
 
+        /*--- Account for non-uniform x coordinates ---*/
+        if (iVertex == 0) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex]);
+        if else (iVertex == EquivArea_PhiAngle[iPhiAngle].size()-1) x_weight[iVertex]=1/(Xcoord_PhiAngle[iPhiAngle][iVertex]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
+        else x_weight[iVertex]=2/(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-Xcoord_PhiAngle[iPhiAngle][iVertex-1]);
+        
+        if ((Coord_i > XCoordBegin_OF)&&(Coord_i < XCoordEnd_OF)) x_weight[iVertex] *= (sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex+1]-XCoordBegin_OF)-sqrt(Xcoord_PhiAngle[iPhiAngle][iVertex]-XCoordBegin_OF))/sqrt(XCoordEnd_OF-XCoordBegin_OF);
+
         su2double Difference = EquivArea_PhiAngle[iPhiAngle][iVertex]-TargetArea_PhiAngle[iPhiAngle][iVertex];
         if (PhiAngleList[iPhiAngle] > AzimuthalWeightCutoffangle) Difference = Difference * AzimuthalWeightFrac;
         su2double percentage = fabs(Difference)*100/fabs(TargetArea_PhiAngle[iPhiAngle][iVertex]);
 
         if ((percentage < 0.1) || (Coord_i < XCoordBegin_OF) || (Coord_i > XCoordEnd_OF)) Difference = 0.0;
 
-        InverseDesign += EAScaleFactor*PhiFactor*Weight_PhiAngle[iPhiAngle][iVertex]*Difference*Difference;
-        InvDesign_PhiAngle[iPhiAngle][iVertex] = EAScaleFactor*PhiFactor*Weight_PhiAngle[iPhiAngle][iVertex]*Difference*Difference;
+        InverseDesign += x_weight[iVertex]*EAScaleFactor*PhiFactor*Weight_PhiAngle[iPhiAngle][iVertex]*Difference*Difference;
+        InvDesign_PhiAngle[iPhiAngle][iVertex] = x_weight[iVertex]*EAScaleFactor*PhiFactor*Weight_PhiAngle[iPhiAngle][iVertex]*Difference*Difference;
       }
 
     InvDesign_file.precision(config->GetOutput_Precision());
@@ -1817,6 +1826,8 @@ void CFlowOutput::Set_NearfieldInverseDesign(CSolver *solver, const CGeometry *g
         InvDesign_file << scientific << (XcoordRot - XcoordRot_init) * 12.0;
       else
         InvDesign_file << scientific << (XcoordRot - XcoordRot_init);
+      
+      InvDesign_file << scientific << ", " << x_weight[iVertex];
 
       for (unsigned long iPhiAngle = 0; iPhiAngle < PhiAngleList.size(); iPhiAngle++) {
         InvDesign_file << scientific << ", " << InvDesign_PhiAngle[iPhiAngle][iVertex];
